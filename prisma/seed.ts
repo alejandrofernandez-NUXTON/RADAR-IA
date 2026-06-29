@@ -15,12 +15,15 @@ async function upsertSetting(key: string, value: string | null, isSecret = false
 }
 
 async function main() {
-  const email = process.env.ADMIN_EMAIL || "admin@empresa.com";
-  const password = process.env.ADMIN_PASSWORD || "change-me-now";
+  const email = process.env.ADMIN_EMAIL || "admin";
+  const password = process.env.ADMIN_PASSWORD || "78202412";
 
   await prisma.user.upsert({
     where: { email },
-    update: {},
+    update: {
+      passwordHash: hashPassword(password),
+      role: "admin"
+    },
     create: {
       email,
       passwordHash: hashPassword(password),

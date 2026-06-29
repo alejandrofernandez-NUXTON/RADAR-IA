@@ -39,8 +39,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\dev-start.ps1
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5433/imagion_ai_radar?schema=public"
 NEXTAUTH_SECRET="replace-with-a-long-random-secret"
-ADMIN_EMAIL="admin@empresa.com"
-ADMIN_PASSWORD="change-me-now"
+ADMIN_EMAIL="admin"
+ADMIN_PASSWORD="78202412"
 APP_ENCRYPTION_SECRET="replace-with-32-plus-random-characters"
 CRON_SECRET="replace-with-a-long-random-cron-secret"
 

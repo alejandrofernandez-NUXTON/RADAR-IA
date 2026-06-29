@@ -52,7 +52,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Se
       <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
         <section className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-medium text-primary">Radar interno</p>
+            <p className="text-sm font-semibold text-primary">Nuxton Knowledge Platform</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-normal">Novedades de IA priorizadas para actuar rapido</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
               Noticias recientes, senales accionables y recursos formativos gratuitos evaluados para uso empresarial.

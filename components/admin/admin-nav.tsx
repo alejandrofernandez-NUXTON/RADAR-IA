@@ -17,9 +17,12 @@ export function AdminNav({ email }: { email: string }) {
   return (
     <aside className="border-b border-border bg-card lg:flex lg:min-h-screen lg:w-64 lg:flex-col lg:border-b-0 lg:border-r">
       <div className="flex items-center justify-between gap-3 px-4 py-4 lg:block">
-        <Link href="/admin" className="flex items-center gap-2 font-semibold">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm text-primary-foreground">AI</span>
-          Admin
+        <Link href="/admin" className="flex min-w-0 items-center gap-3 font-semibold">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-sm text-primary-foreground">NX</span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm leading-5">Nuxton Knowledge Platform</span>
+            <span className="block text-xs font-medium leading-4 text-muted-foreground">Admin</span>
+          </span>
         </Link>
         <div className="flex items-center gap-2 lg:hidden">
           <ThemeToggle />

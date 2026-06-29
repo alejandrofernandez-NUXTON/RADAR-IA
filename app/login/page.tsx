@@ -26,6 +26,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Lock className="h-5 w-5" aria-hidden />
           </div>
+          <p className="text-sm font-semibold text-primary">Nuxton Knowledge Platform</p>
           <CardTitle>Acceso administrador</CardTitle>
           <p className="text-sm leading-6 text-muted-foreground">Introduce las credenciales creadas en el seed inicial.</p>
         </CardHeader>
@@ -34,8 +35,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
           <form action="/api/auth/login" method="post" className="space-y-4">
             <input type="hidden" name="next" value={next} />
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" autoComplete="email" required />
+              <Label htmlFor="user">Usuario</Label>
+              <Input id="user" name="user" type="text" autoComplete="username" required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>

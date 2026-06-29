@@ -13,9 +13,12 @@ export function MainNav() {
   return (
     <header className="border-b border-border bg-card/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm text-primary-foreground">AI</span>
-          <span>Radar IA</span>
+        <Link href="/" className="flex min-w-0 items-center gap-3 font-semibold">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-sm text-primary-foreground">NX</span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm leading-5 sm:text-base">Nuxton Knowledge Platform</span>
+            <span className="block text-xs font-medium leading-4 text-muted-foreground">Radar IA</span>
+          </span>
         </Link>
         <nav className="hidden items-center gap-1 md:flex">
           {links.map((link) => {
