@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 42 33% 98%;
+  --foreground: 210 18% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 210 18% 12%;
+  --muted: 210 18% 95%;
+  --muted-foreground: 215 12% 40%;
+  --border: 210 14% 88%;
+  --primary: 176 56% 25%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 42 92% 58%;
+  --accent-foreground: 210 18% 12%;
+  --destructive: 4 72% 46%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: hsl(var(--background));
+  color-scheme: light;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
+  color: hsl(var(--foreground));
+  background:
+    linear-gradient(180deg, rgba(245, 244, 239, 0.9) 0%, rgba(250, 249, 246, 1) 260px),
+    hsl(var(--background));
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+input,
+select,
+textarea {
+  min-width: 0;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.break-anywhere {
+  overflow-wrap: anywhere;
+}
+
+::selection {
+  background: hsl(var(--accent) / 0.35);
+}
+
+.prose-lite p {
+  margin-bottom: 1rem;
+}

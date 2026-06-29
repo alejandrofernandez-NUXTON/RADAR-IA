@@ -1,0 +1,248 @@
+import { TrainingStatus } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+import { GeminiService } from "@/lib/services/gemini-service";
+import { LogService } from "@/lib/services/log-service";
+import type { JobResult, TrainingCandidate } from "@/lib/types";
+
+export interface TrainingSearchProvider {
+  name: string;
+  search(limit: number): Promise<TrainingCandidate[]>;
+}
+
+function decodeHtml(value: string) {
+  return value
+    .replaceAll("&amp;", "&")
+    .replaceAll("&quot;", "\"")
+    .replaceAll("&#39;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function fetchPageMetadata(candidate: TrainingCandidate): Promise<TrainingCandidate> {
+  try {
+    const response = await fetch(candidate.url, { signal: AbortSignal.timeout(25_000) });
+    if (!response.ok) return candidate;
+    const html = await response.text();
+    const title =
+      html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
+      html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+    const description =
+      html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)?.[1] ||
+      html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)?.[1];
+
+    return {
+      ...candidate,
+      title: title ? decodeHtml(title) : candidate.title,
+      description: description ? decodeHtml(description) : candidate.description
+    };
+  } catch {
+    return candidate;
+  }
+}
+
+class ReputableCatalogProvider implements TrainingSearchProvider {
+  name = "reputable-catalog";
+
+  async search(limit: number) {
+    const candidates: TrainingCandidate[] = [
+      {
+        title: "Hugging Face Course",
+        description: "Curso gratuito sobre transformers, NLP, modelos y uso practico del ecosistema Hugging Face.",
+        url: "https://huggingface.co/learn",
+        provider: "Hugging Face",
+        contentType: "course",
+        estimatedDuration: "Variable",
+        level: "intermediate",
+        topics: ["LLMs", "open source", "transformers"],
+        language: "en",
+        isFree: true
+      },
+      {
+        title: "Microsoft Learn AI",
+        description: "Rutas gratuitas de aprendizaje de Microsoft sobre IA, Azure AI y copilots.",
+        url: "https://learn.microsoft.com/training/ai/",
+        provider: "Microsoft Learn",
+        contentType: "course",
+        estimatedDuration: "Variable",
+        level: "beginner",
+        topics: ["IA empresarial", "Azure AI", "copilots"],
+        language: "en",
+        isFree: true
+      },
+      {
+        title: "Google AI for Developers",
+        description: "Documentacion y guias gratuitas para Gemini API, modelos y desarrollo con IA.",
+        url: "https://ai.google.dev/",
+        provider: "Google AI",
+        contentType: "documentation",
+        estimatedDuration: "Variable",
+        level: "intermediate",
+        topics: ["Gemini", "APIs", "desarrollo"],
+        language: "en",
+        isFree: true
+      },
+      {
+        title: "DeepLearning.AI Short Courses",
+        description: "Cursos breves gratuitos sobre GenAI, agentes, RAG, prompting y herramientas modernas.",
+        url: "https://www.deeplearning.ai/short-courses/",
+        provider: "DeepLearning.AI",
+        contentType: "course",
+        estimatedDuration: "1-2 horas por curso",
+        level: "intermediate",
+        topics: ["GenAI", "RAG", "agentes", "prompting"],
+        language: "en",
+        isFree: true
+      },
+      {
+        title: "GitHub Skills: GitHub Copilot",
+        description: "Formacion practica gratuita para trabajar con GitHub Copilot en flujos de desarrollo.",
+        url: "https://skills.github.com/",
+        provider: "GitHub Skills",
+        contentType: "tutorial",
+        estimatedDuration: "Menos de 1 hora",
+        level: "beginner",
+        topics: ["Copilot", "desarrollo", "productividad"],
+        language: "en",
+        isFree: true
+      }
+    ];
+
+    return Promise.all(candidates.slice(0, limit).map(fetchPageMetadata));
+  }
+}
+
+class FeedTrainingProvider implements TrainingSearchProvider {
+  name = "public-feeds";
+
+  private feeds = [
+    {
+      provider: "Hugging Face Blog",
+      url: "https://huggingface.co/blog/feed.xml",
+      topics: ["open source", "modelos", "LLMs"]
+    },
+    {
+      provider: "Microsoft AI Blog",
+      url: "https://blogs.microsoft.com/ai/feed/",
+      topics: ["IA empresarial", "copilots", "productividad"]
+    }
+  ];
+
+  async search(limit: number) {
+    const results: TrainingCandidate[] = [];
+
+    for (const feed of this.feeds) {
+      try {
+        const response = await fetch(feed.url, { signal: AbortSignal.timeout(25_000) });
+        if (!response.ok) continue;
+        const xml = await response.text();
+        const items = [...xml.matchAll(/<(item|entry)[^>]*>([\s\S]*?)<\/\1>/gi)].slice(0, Math.ceil(limit / this.feeds.length));
+
+        for (const [, , item] of items) {
+          const title = decodeHtml(item.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g, " ") || feed.provider);
+          const link =
+            item.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1]?.replace(/<[^>]+>/g, " ").trim() ||
+            item.match(/<link[^>]+href="([^"]+)"/i)?.[1] ||
+            feed.url;
+          const description = decodeHtml(
+            item.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1]?.replace(/<[^>]+>/g, " ") ||
+              item.match(/<summary[^>]*>([\s\S]*?)<\/summary>/i)?.[1]?.replace(/<[^>]+>/g, " ") ||
+              "Recurso publico relacionado con IA."
+          );
+          const publishedRaw =
+            item.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1] ||
+            item.match(/<published[^>]*>([\s\S]*?)<\/published>/i)?.[1] ||
+            item.match(/<updated[^>]*>([\s\S]*?)<\/updated>/i)?.[1];
+
+          results.push({
+            title,
+            description,
+            url: decodeHtml(link),
+            provider: feed.provider,
+            contentType: "article",
+            estimatedDuration: "10-20 min",
+            level: "intermediate",
+            topics: feed.topics,
+            language: "en",
+            isFree: true,
+            publishedAt: publishedRaw ? new Date(decodeHtml(publishedRaw)) : undefined
+          });
+        }
+      } catch (error) {
+        await LogService.warn("training.provider", `No se pudo consultar ${feed.provider}`, { error: (error as Error).message });
+      }
+    }
+
+    return results.slice(0, limit);
+  }
+}
+
+export class TrainingSearchService {
+  private geminiService = new GeminiService();
+  private providers: TrainingSearchProvider[] = [new ReputableCatalogProvider(), new FeedTrainingProvider()];
+
+  async runSearch(limit = 24): Promise<JobResult> {
+    const candidates: TrainingCandidate[] = [];
+
+    for (const provider of this.providers) {
+      try {
+        const results = await provider.search(Math.ceil(limit / this.providers.length));
+        candidates.push(...results);
+      } catch (error) {
+        await LogService.error("training.provider", `Error buscando formaciones en ${provider.name}`, {
+          error: (error as Error).message
+        });
+      }
+    }
+
+    const uniqueCandidates = Array.from(new Map(candidates.map((candidate) => [candidate.url, candidate])).values()).slice(0, limit);
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (const candidate of uniqueCandidates) {
+      const existing = await prisma.trainingItem.findUnique({ where: { url: candidate.url } });
+      if (existing) continue;
+
+      try {
+        const { parsed, raw } = await this.geminiService.evaluateTraining(candidate);
+        await prisma.trainingItem.create({
+          data: {
+            title: parsed.title,
+            description: parsed.description,
+            url: parsed.url,
+            provider: parsed.provider,
+            contentType: parsed.contentType,
+            estimatedDuration: parsed.estimatedDuration,
+            level: parsed.level,
+            topics: parsed.topics,
+            qualityScore: parsed.qualityScore,
+            practicalityScore: parsed.practicalityScore,
+            freshnessScore: parsed.freshnessScore,
+            overallScore: parsed.overallScore,
+            whyRecommended: parsed.whyRecommended,
+            isFree: parsed.isFree,
+            language: parsed.language,
+            status: parsed.isFree && parsed.overallScore >= 74 ? TrainingStatus.PUBLISHED : TrainingStatus.REVIEW,
+            rawEvaluation: raw as Prisma.InputJsonValue
+          }
+        });
+        successCount += 1;
+      } catch (error) {
+        failedCount += 1;
+        await LogService.error("training.analysis", "No se pudo evaluar una formacion", {
+          url: candidate.url,
+          error: (error as Error).message
+        });
+      }
+    }
+
+    return {
+      processedCount: uniqueCandidates.length,
+      successCount,
+      failedCount,
+      metadata: { providers: this.providers.map((provider) => provider.name) }
+    };
+  }
+}

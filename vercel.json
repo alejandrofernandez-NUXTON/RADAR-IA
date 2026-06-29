@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/news",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/training",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/telegram",
+      "schedule": "15 * * * *"
+    }
+  ]
+}

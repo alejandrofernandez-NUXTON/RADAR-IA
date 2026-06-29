@@ -1,0 +1,199 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SourceType {
+  YOUTUBE_VIDEO      @map("youtube_video")
+  YOUTUBE_CHANNEL    @map("youtube_channel")
+  YOUTUBE_PLAYLIST   @map("youtube_playlist")
+  RSS_FEED           @map("rss_feed")
+  WEBSITE            @map("website")
+  NEWSLETTER_MANUAL  @map("newsletter_manual")
+}
+
+enum NewsStatus {
+  DRAFT             @map("draft")
+  REVIEW            @map("review")
+  PUBLISHED         @map("published")
+  DISCARDED         @map("discarded")
+  SENT_TO_TELEGRAM  @map("sent_to_telegram")
+  ERROR             @map("error")
+}
+
+enum TrainingStatus {
+  REVIEW     @map("review")
+  PUBLISHED  @map("published")
+  DISCARDED  @map("discarded")
+  FEATURED    @map("featured")
+}
+
+enum TelegramStatus {
+  PENDING  @map("pending")
+  SENT     @map("sent")
+  FAILED   @map("failed")
+}
+
+enum JobStatus {
+  RUNNING  @map("running")
+  SUCCESS  @map("success")
+  FAILED   @map("failed")
+  PARTIAL  @map("partial")
+}
+
+enum RecommendedAction {
+  PUBLISH  @map("publish")
+  REVIEW   @map("review")
+  DISCARD  @map("discard")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Setting {
+  key       String   @id
+  value     String?
+  isSecret  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Source {
+  id              String      @id @default(cuid())
+  name            String
+  type            SourceType
+  url             String      @unique
+  category        String
+  language        String      @default("es")
+  priority        Int         @default(1)
+  active          Boolean     @default(true)
+  lastProcessedAt DateTime?
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  newsItems       NewsItem[]
+
+  @@index([active, priority])
+  @@index([type])
+}
+
+model NewsItem {
+  id                    String            @id @default(cuid())
+  sourceId              String?
+  source                Source?           @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceUrl             String
+  contentHash           String?           @unique
+  externalId            String?
+  title                 String
+  shortSummary          String
+  longSummary           String
+  keyPoints             Json              @default("[]")
+  whyItMatters          String
+  businessApplications  Json              @default("[]")
+  toolsMentioned        Json              @default("[]")
+  companiesMentioned    Json              @default("[]")
+  categories            Json              @default("[]")
+  tags                  Json              @default("[]")
+  noveltyScore          Int               @default(0)
+  relevanceScore        Int               @default(0)
+  practicalityScore     Int               @default(0)
+  urgencyScore          Int               @default(0)
+  overallScore          Int               @default(0)
+  recommendedAction     RecommendedAction @default(REVIEW)
+  telegramWorthy        Boolean           @default(false)
+  featured              Boolean           @default(false)
+  status                NewsStatus        @default(REVIEW)
+  publishedAt           DateTime?
+  sentToTelegramAt      DateTime?
+  rawGeminiResponse     Json?
+  rawSourceMetadata     Json?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  telegramMessages      TelegramMessage[]
+
+  @@unique([sourceId, sourceUrl])
+  @@index([status, overallScore])
+  @@index([createdAt])
+}
+
+model TrainingItem {
+  id                  String         @id @default(cuid())
+  title               String
+  description         String
+  url                 String         @unique
+  provider            String
+  contentType         String
+  estimatedDuration   String
+  level               String
+  topics              Json           @default("[]")
+  qualityScore        Int            @default(0)
+  practicalityScore   Int            @default(0)
+  freshnessScore      Int            @default(0)
+  overallScore        Int            @default(0)
+  whyRecommended      String
+  isFree              Boolean        @default(true)
+  language            String         @default("es")
+  status              TrainingStatus @default(REVIEW)
+  internalNote        String?
+  rawEvaluation       Json?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  @@index([status, overallScore])
+  @@index([provider])
+}
+
+model TelegramMessage {
+  id               String         @id @default(cuid())
+  newsItemId        String?
+  newsItem          NewsItem?      @relation(fields: [newsItemId], references: [id], onDelete: SetNull)
+  chatId            String
+  messageText       String
+  telegramResponse  Json?
+  status            TelegramStatus @default(PENDING)
+  sentAt            DateTime?
+  errorMessage      String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([newsItemId, status])
+  @@index([status])
+}
+
+model JobRun {
+  id             String    @id @default(cuid())
+  jobType        String
+  status         JobStatus @default(RUNNING)
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+  processedCount Int       @default(0)
+  successCount   Int       @default(0)
+  failedCount    Int       @default(0)
+  errorMessage   String?
+  metadata       Json?
+
+  @@index([jobType, startedAt])
+  @@index([status])
+}
+
+model LogEntry {
+  id        String   @id @default(cuid())
+  level     String
+  scope     String
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([level, createdAt])
+  @@index([scope, createdAt])
+}

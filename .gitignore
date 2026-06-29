@@ -1,0 +1,14 @@
+.next
+node_modules
+.env
+.env.local
+.env.*.local
+dist
+coverage
+*.log
+*.tsbuildinfo
+prisma/dev.db
+.agents
+.codex
+.vercel
+TEXTTO PARA CHATGPT.txt
