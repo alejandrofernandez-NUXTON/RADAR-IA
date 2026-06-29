@@ -1,4 +1,5 @@
 import { Lock } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/form";
@@ -17,6 +18,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Search
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-10">
+      <div className="fixed right-4 top-4 z-20">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">

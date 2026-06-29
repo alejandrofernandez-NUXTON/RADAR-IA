@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { GraduationCap, LayoutDashboard, Newspaper, Settings } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { ButtonLink } from "@/components/ui/button";
 
 export function MainNav() {
@@ -31,10 +32,13 @@ export function MainNav() {
             );
           })}
         </nav>
-        <ButtonLink href="/admin" variant="outline" size="sm">
-          <Settings className="h-4 w-4" aria-hidden />
-          Admin
-        </ButtonLink>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <ButtonLink href="/admin" variant="outline" size="sm">
+            <Settings className="h-4 w-4" aria-hidden />
+            Admin
+          </ButtonLink>
+        </div>
       </div>
     </header>
   );

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BookOpen, Briefcase, Newspaper, PlayCircle, Settings, SlidersHorizontal, Stethoscope } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
@@ -20,11 +21,14 @@ export function AdminNav({ email }: { email: string }) {
           <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm text-primary-foreground">AI</span>
           Admin
         </Link>
-        <form action="/api/auth/logout" method="post" className="lg:hidden">
-          <Button variant="ghost" size="sm" type="submit">
-            Salir
-          </Button>
-        </form>
+        <div className="flex items-center gap-2 lg:hidden">
+          <ThemeToggle />
+          <form action="/api/auth/logout" method="post">
+            <Button variant="ghost" size="sm" type="submit">
+              Salir
+            </Button>
+          </form>
+        </div>
       </div>
       <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0">
         {navItems.map((item) => {
