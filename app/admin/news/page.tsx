@@ -1,7 +1,8 @@
 import { NewsStatus } from "@prisma/client";
 import Link from "next/link";
-import { Eye, RefreshCcw, Send, Star, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Eye, RefreshCcw, Send, Star, ThumbsDown, ThumbsUp, Trash2 } from "lucide-react";
 import {
+  deleteNewsAction,
   reprocessNewsAction,
   sendNewsToTelegramAction,
   setNewsStatusAction,
@@ -127,6 +128,12 @@ export default async function AdminNewsPage({ searchParams }: { searchParams: Se
                           <input type="hidden" name="id" value={item.id} />
                           <Button variant="outline" size="icon" title="Reprocesar">
                             <RefreshCcw className="h-4 w-4" aria-hidden />
+                          </Button>
+                        </form>
+                        <form action={deleteNewsAction}>
+                          <input type="hidden" name="id" value={item.id} />
+                          <Button variant="danger" size="icon" title="Eliminar noticia">
+                            <Trash2 className="h-4 w-4" aria-hidden />
                           </Button>
                         </form>
                       </div>

@@ -155,6 +155,29 @@ export async function toggleNewsFeaturedAction(formData: FormData) {
   revalidatePath("/admin/news");
 }
 
+export async function deleteNewsAction(formData: FormData) {
+  await requireAdmin();
+  const id = formString(formData, "id");
+  if (!id) return;
+
+  const item = await prisma.newsItem.findUnique({ where: { id }, select: { id: true, title: true } });
+  if (!item) {
+    revalidatePath("/admin/news");
+    return;
+  }
+
+  await prisma.telegramMessage.deleteMany({ where: { newsItemId: id } });
+  await prisma.newsItem.delete({ where: { id } });
+  await LogService.info("news.delete", "Noticia eliminada desde admin", {
+    newsItemId: id,
+    title: item.title
+  });
+
+  revalidatePath("/admin/news");
+  revalidatePath("/");
+  revalidatePath("/news");
+}
+
 export async function updateNewsContentAction(formData: FormData) {
   await requireAdmin();
   const id = formString(formData, "id");
