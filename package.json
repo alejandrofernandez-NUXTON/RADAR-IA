@@ -15,6 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "ops:diagnose": "tsx scripts/ops-diagnose.ts",
+    "ops:gemini:diagnose": "tsx scripts/gemini-diagnose.ts",
     "ops:telegram:discover": "tsx scripts/telegram-discover.ts",
     "ops:telegram:save-first": "tsx scripts/telegram-discover.ts --save-first",
     "ops:telegram:test": "tsx scripts/telegram-test.ts"

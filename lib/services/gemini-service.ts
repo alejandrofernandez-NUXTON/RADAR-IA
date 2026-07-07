@@ -19,6 +19,12 @@ type GeminiResponse = {
   }>;
 };
 
+type GeminiTextResult = {
+  text: string;
+  model: string;
+  raw: unknown;
+};
+
 type GeminiInteractionResponse = {
   output_text?: string;
   steps?: Array<{
@@ -29,6 +35,49 @@ type GeminiInteractionResponse = {
     }>;
   }>;
 };
+
+type ModelFailure = {
+  model: string;
+  status?: number;
+  message: string;
+};
+
+const GEMINI_MODEL_CANDIDATES = [
+  "gemini-3.5-flash",
+  "gemini-flash-latest",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-2.0-flash"
+];
+
+function normalizeModelName(model: string) {
+  return model.trim().replace(/^models\//, "");
+}
+
+function modelCandidates(configuredModel: string) {
+  return Array.from(new Set([normalizeModelName(configuredModel), ...GEMINI_MODEL_CANDIDATES].filter(Boolean)));
+}
+
+function modelPath(model: string) {
+  return `models/${normalizeModelName(model)}`;
+}
+
+async function readErrorMessage(response: Response) {
+  const text = await response.text();
+  try {
+    const payload = JSON.parse(text) as { error?: { message?: string; status?: string } };
+    return payload.error?.message || payload.error?.status || text;
+  } catch {
+    return text;
+  }
+}
+
+function summarizeModelFailures(context: string, failures: ModelFailure[]) {
+  return `${context} fallo con todos los modelos probados: ${failures
+    .map((failure) => `${failure.model}${failure.status ? ` (${failure.status})` : ""}: ${failure.message}`)
+    .join(" | ")}`;
+}
 
 function extractJson(text: string) {
   const cleaned = text
@@ -63,53 +112,29 @@ export class GeminiService {
       throw new Error("Gemini API key is not configured.");
     }
 
-    const model = modelOverride || settings.geminiModel;
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      model
-    )}:generateContent?key=${encodeURIComponent(settings.geminiApiKey)}`;
+    const models = modelOverride ? [normalizeModelName(modelOverride)] : modelCandidates(settings.geminiModel);
+    const failures: ModelFailure[] = [];
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: "Devuelve exactamente este JSON valido: {\"ok\":true}" }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0,
-          responseMimeType: "application/json"
-        }
-      }),
-      signal: AbortSignal.timeout(30_000)
-    });
-    const text = await response.text();
-
-    if (!response.ok) {
-      let message = text;
+    for (const model of models) {
       try {
-        const payload = JSON.parse(text) as { error?: { message?: string; status?: string } };
-        message = payload.error?.message || payload.error?.status || text;
-      } catch {
-        message = text;
+        const response = await this.requestTextOnce(
+          "Devuelve exactamente este JSON valido: {\"ok\":true}",
+          model,
+          settings.geminiApiKey,
+          30_000,
+          0
+        );
+        return { model, response: response.raw };
+      } catch (error) {
+        failures.push({ model, message: (error as Error).message });
       }
-      throw new Error(`Gemini ${model} failed with ${response.status}: ${message}`);
     }
 
-    return { model, response: text };
+    throw new Error(summarizeModelFailures("Gemini", failures));
   }
 
-  private async requestText(prompt: string) {
-    const settings = await SettingsService.getAll();
-    if (!settings.geminiApiKey) {
-      throw new Error("Gemini API key is not configured.");
-    }
-
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-      settings.geminiModel
-    )}:generateContent?key=${encodeURIComponent(settings.geminiApiKey)}`;
+  private async requestTextOnce(prompt: string, model: string, apiKey: string, timeoutMs = 75_000, temperature = 0.2): Promise<GeminiTextResult> {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/${modelPath(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -122,32 +147,56 @@ export class GeminiService {
           }
         ],
         generationConfig: {
-          temperature: 0.2,
+          temperature,
           responseMimeType: "application/json"
         }
       }),
-      signal: AbortSignal.timeout(75_000)
+      signal: AbortSignal.timeout(timeoutMs)
     });
-
-    const payload = (await response.json()) as GeminiResponse & { error?: { message?: string } };
     if (!response.ok) {
-      throw new Error(payload.error?.message || `Gemini request failed with status ${response.status}`);
+      throw new Error(`Gemini ${model} failed with ${response.status}: ${await readErrorMessage(response)}`);
     }
 
+    const payload = (await response.json()) as GeminiResponse;
     const text = payload.candidates?.flatMap((candidate) => candidate.content?.parts?.map((part) => part.text || "") || []).join("\n");
     if (!text) throw new Error("Gemini returned an empty response.");
-    return text;
+    return { text, model, raw: payload };
+  }
+
+  private async requestText(prompt: string) {
+    const settings = await SettingsService.getAll();
+    if (!settings.geminiApiKey) {
+      throw new Error("Gemini API key is not configured.");
+    }
+
+    const failures: ModelFailure[] = [];
+    for (const model of modelCandidates(settings.geminiModel)) {
+      try {
+        return await this.requestTextOnce(prompt, model, settings.geminiApiKey);
+      } catch (error) {
+        failures.push({ model, message: (error as Error).message });
+      }
+    }
+
+    throw new Error(summarizeModelFailures("Gemini text generation", failures));
   }
 
   private async requestJson<T>(prompt: string, schema: z.ZodType<T>) {
     const first = await this.requestText(prompt);
     try {
-      return { parsed: parseOrThrow(first, schema), raw: JSON.parse(extractJson(first)) as unknown };
+      return { parsed: parseOrThrow(first.text, schema), raw: { model: first.model, response: JSON.parse(extractJson(first.text)) as unknown } };
     } catch (firstError) {
-      const repairPrompt = `Corrige el siguiente contenido para que sea JSON valido y respete exactamente el schema solicitado. Devuelve solo JSON.\n\n${first}`;
+      const repairPrompt = `Corrige el siguiente contenido para que sea JSON valido y respete exactamente el schema solicitado. Devuelve solo JSON.\n\n${first.text}`;
       const repaired = await this.requestText(repairPrompt);
       try {
-        return { parsed: parseOrThrow(repaired, schema), raw: JSON.parse(extractJson(repaired)) as unknown };
+        return {
+          parsed: parseOrThrow(repaired.text, schema),
+          raw: {
+            model: first.model,
+            repairModel: repaired.model,
+            response: JSON.parse(extractJson(repaired.text)) as unknown
+          }
+        };
       } catch (repairError) {
         throw new Error(`Gemini JSON validation failed: ${(repairError as Error).message}. First error: ${(firstError as Error).message}`);
       }
@@ -164,42 +213,70 @@ export class GeminiService {
     return text || "";
   }
 
-  private async requestInteractionJson<T>(prompt: string, videoUrl: string, schema: z.ZodType<T>) {
-    const settings = await SettingsService.getAll();
-    if (!settings.geminiApiKey) {
-      throw new Error("Gemini API key is not configured.");
-    }
-
+  private async requestInteractionOnce(prompt: string, videoUrl: string, model: string, apiKey: string): Promise<GeminiTextResult> {
     const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-goog-api-key": settings.geminiApiKey
+        "x-goog-api-key": apiKey
       },
       body: JSON.stringify({
-        model: settings.geminiModel,
+        model: normalizeModelName(model),
         input: [
-          { type: "text", text: prompt },
-          { type: "video", uri: videoUrl }
+          { type: "video", uri: videoUrl },
+          { type: "text", text: prompt }
         ]
       }),
       signal: AbortSignal.timeout(120_000)
     });
 
-    const payload = (await response.json()) as GeminiInteractionResponse & { error?: { message?: string } };
     if (!response.ok) {
-      throw new Error(payload.error?.message || `Gemini Interactions request failed with status ${response.status}`);
+      throw new Error(`Gemini Interactions ${model} failed with ${response.status}: ${await readErrorMessage(response)}`);
     }
 
+    const payload = (await response.json()) as GeminiInteractionResponse;
     const text = this.extractInteractionText(payload);
     if (!text) throw new Error("Gemini Interactions returned an empty response.");
+    return { text, model: normalizeModelName(model), raw: payload };
+  }
 
-    try {
-      return { parsed: parseOrThrow(text, schema), raw: payload as unknown };
-    } catch (firstError) {
-      const repaired = await this.requestText(`Corrige este contenido para que sea JSON valido. Devuelve solo JSON.\n\n${text}`);
+  private async requestInteractionText(prompt: string, videoUrl: string) {
+    const settings = await SettingsService.getAll();
+    if (!settings.geminiApiKey) {
+      throw new Error("Gemini API key is not configured.");
+    }
+
+    const failures: ModelFailure[] = [];
+    for (const model of modelCandidates(settings.geminiModel)) {
       try {
-        return { parsed: parseOrThrow(repaired, schema), raw: payload as unknown };
+        return await this.requestInteractionOnce(prompt, videoUrl, model, settings.geminiApiKey);
+      } catch (error) {
+        failures.push({ model, message: (error as Error).message });
+      }
+    }
+
+    throw new Error(summarizeModelFailures("Gemini video analysis", failures));
+  }
+
+  private async requestInteractionJson<T>(prompt: string, videoUrl: string, schema: z.ZodType<T>) {
+    const first = await this.requestInteractionText(prompt, videoUrl);
+    try {
+      return {
+        parsed: parseOrThrow(first.text, schema),
+        raw: { model: first.model, mode: "youtube_url", response: first.raw }
+      };
+    } catch (firstError) {
+      const repaired = await this.requestText(`Corrige este contenido para que sea JSON valido. Devuelve solo JSON.\n\n${first.text}`);
+      try {
+        return {
+          parsed: parseOrThrow(repaired.text, schema),
+          raw: {
+            model: first.model,
+            repairModel: repaired.model,
+            mode: "youtube_url",
+            response: first.raw
+          }
+        };
       } catch (repairError) {
         throw new Error(`Gemini video JSON validation failed: ${(repairError as Error).message}. First error: ${(firstError as Error).message}`);
       }
@@ -208,6 +285,7 @@ export class GeminiService {
 
   async analyzeNews(content: SourceContent) {
     const settings = await SettingsService.getAll();
+    let videoModeError: string | null = null;
     const prompt = `${settings.basePrompt}
 
 Idioma de salida: ${settings.outputLanguage}
@@ -237,15 +315,32 @@ ${content.transcript || "No disponible"}
         try {
           return await this.requestInteractionJson(prompt, content.sourceUrl, geminiNewsSchema);
         } catch (videoError) {
-          void videoError;
+          videoModeError = (videoError as Error).message;
         }
       }
 
-      return await this.requestJson(prompt, geminiNewsSchema);
+      const textResult = await this.requestJson(prompt, geminiNewsSchema);
+      if (!videoModeError) return textResult;
+      return {
+        ...textResult,
+        raw: {
+          ...(typeof textResult.raw === "object" && textResult.raw ? textResult.raw : { response: textResult.raw }),
+          mode: "text_fallback_after_youtube_url_failure",
+          videoModeError
+        }
+      };
     } catch (error) {
-      if (settings.geminiApiKey) throw error;
       const fallback = this.fallbackNewsAnalysis(content);
-      return { parsed: fallback, raw: { fallback: true, reason: (error as Error).message } };
+      return {
+        parsed: fallback,
+        raw: {
+          fallback: true,
+          provider: "local",
+          geminiConfigured: Boolean(settings.geminiApiKey),
+          videoModeError,
+          reason: (error as Error).message
+        }
+      };
     }
   }
 
@@ -262,9 +357,16 @@ ${JSON.stringify(candidate, null, 2)}
     try {
       return await this.requestJson(prompt, trainingEvaluationSchema);
     } catch (error) {
-      if (settings.geminiApiKey) throw error;
       const fallback = this.fallbackTrainingEvaluation(candidate);
-      return { parsed: fallback, raw: { fallback: true, reason: (error as Error).message } };
+      return {
+        parsed: fallback,
+        raw: {
+          fallback: true,
+          provider: "local",
+          geminiConfigured: Boolean(settings.geminiApiKey),
+          reason: (error as Error).message
+        }
+      };
     }
   }
 
@@ -294,7 +396,7 @@ ${JSON.stringify(candidate, null, 2)}
       practicalityScore,
       urgencyScore,
       overallScore,
-      recommendedAction: overallScore >= 70 ? "review" : "discard",
+      recommendedAction: "review",
       telegramWorthy: false,
       telegramMessage: "",
       sourceReliability: "medium",

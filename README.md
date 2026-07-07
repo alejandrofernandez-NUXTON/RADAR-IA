@@ -66,6 +66,7 @@ npm run dev
 npm run typecheck
 npm run build
 npm run ops:diagnose
+npm run ops:gemini:diagnose
 npm run ops:telegram:discover
 npm run ops:telegram:save-first
 npm run ops:telegram:test
@@ -81,7 +82,15 @@ npm run ops:telegram:test
 6. Guarda.
 7. Ejecuta `/admin/jobs` -> `Buscar noticias ahora`.
 
-Si no hay API key, los jobs crean evaluaciones fallback para poder probar el flujo, pero el analisis real requiere Gemini.
+Diagnostico especifico:
+
+```bash
+npm run ops:gemini:diagnose
+```
+
+Si Gemini devuelve `403 Your project has been denied access`, la clave existe pero el proyecto de Google no tiene permiso de inferencia para ese modelo. Si devuelve `429 quota exceeded`, la clave/proyecto no tiene cuota disponible para ese modelo. En ambos casos hay que renovar la key, activar facturacion/cuota o usar otro proyecto/modelo con acceso.
+
+Mientras Gemini no este operativo, los jobs crean evaluaciones fallback en estado de revision para poder probar el flujo de YouTube, base de datos, admin y Telegram. El analisis real de IA requiere una API key/proyecto Gemini valido.
 
 ## Telegram
 
@@ -116,6 +125,7 @@ Desde PowerShell:
 
 ```bash
 npm run ops:diagnose
+npm run ops:gemini:diagnose
 ```
 
 ## Exponer localmente con seguridad
