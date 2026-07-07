@@ -31,6 +31,10 @@ function newsStatusFor(action: "publish" | "review" | "discard", score: number, 
   return NewsStatus.REVIEW;
 }
 
+function isAnalysisUnavailable(raw: unknown) {
+  return Boolean(raw && typeof raw === "object" && "analysisUnavailable" in raw && (raw as { analysisUnavailable?: unknown }).analysisUnavailable);
+}
+
 export class NewsAnalysisService {
   private sourceService = new SourceService();
   private geminiService = new GeminiService();
@@ -147,7 +151,7 @@ export class NewsAnalysisService {
     try {
       const settings = await SettingsService.getAll();
       const { parsed, raw } = await this.geminiService.analyzeNews(content);
-      const status = newsStatusFor(parsed.recommendedAction, parsed.overallScore, settings.publishThreshold);
+      const status = isAnalysisUnavailable(raw) ? NewsStatus.ERROR : newsStatusFor(parsed.recommendedAction, parsed.overallScore, settings.publishThreshold);
       const shouldSendTelegram =
         settings.telegramEnabled &&
         status === NewsStatus.PUBLISHED &&

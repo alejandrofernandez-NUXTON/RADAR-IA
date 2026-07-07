@@ -105,6 +105,14 @@ function isYouTubeSourceType(type: SourceType) {
   return type === SourceType.YOUTUBE_VIDEO || type === SourceType.YOUTUBE_PLAYLIST || type === SourceType.YOUTUBE_CHANNEL;
 }
 
+function isYouTubeWatchUrl(url: string) {
+  return url.includes("youtube.com/watch") || url.includes("youtu.be/");
+}
+
+function hasUsefulTranscript(content: SourceContent) {
+  return Boolean(content.transcript && content.transcript.replace(/\s+/g, " ").trim().length > 500);
+}
+
 export class GeminiService {
   async testConnection(modelOverride?: string) {
     const settings = await SettingsService.getAll();
@@ -283,10 +291,63 @@ export class GeminiService {
     }
   }
 
+  private buildNewsPrompt(content: SourceContent, outputLanguage: string, mode: "video" | "transcript" | "metadata") {
+    const evidence =
+      mode === "video"
+        ? `Analiza el VIDEO de YouTube como fuente principal. Usa el audio, imagenes, texto en pantalla y estructura temporal del video. La descripcion del video no debe usarse para resumir, porque suele contener sponsors, enlaces, timestamps y material promocional.`
+        : mode === "transcript"
+          ? `Analiza el transcript/subtitulos como fuente principal. No uses la descripcion del video para resumir salvo para metadatos basicos.`
+          : `Analiza el contenido disponible, pero si solo hay titulo/descripcion promocional y no hay contenido sustantivo, devuelve recommendedAction "discard" y puntuaciones bajas.`;
+
+    const descriptionBlock =
+      mode === "metadata"
+        ? `
+Descripcion:
+${content.description || "No disponible"}`
+        : "";
+
+    const transcriptBlock =
+      mode === "transcript"
+        ? `
+Transcript/subtitulos:
+${content.transcript || "No disponible"}`
+        : "";
+
+    return `${evidence}
+
+Objetivo editorial:
+- Sintetiza SOLO novedades concretas y utiles para una empresa.
+- Ignora sponsors, llamadas a comunidades, newsletters, descuentos, links promocionales, sorteos y relleno del creador.
+- Si el video menciona varias noticias, separa las 3-6 mas relevantes y descarta lo accesorio.
+- No copies la descripcion del video.
+- No publiques si no puedes verificar contenido sustantivo del video o transcript.
+- Incluye nombres de modelos, herramientas, companias y fechas cuando aparezcan.
+- "shortSummary" debe ser un resumen ejecutivo de 2-3 frases, no una lista de links.
+- "whyItMatters" debe explicar impacto empresarial real.
+- "businessApplications" deben ser acciones concretas: piloto, evaluacion, proceso afectado, area responsable.
+- "keyPoints" deben ser concretos y accionables.
+- Si hay incertidumbre, dilo en "sourceReliability" y baja la puntuacion.
+
+Idioma de salida: ${outputLanguage}
+
+Fuente:
+- Nombre de fuente: ${content.source.name}
+- Tipo: ${content.source.type}
+- URL: ${content.sourceUrl}
+- Autor/canal: ${content.author || "desconocido"}
+- Fecha publicada: ${content.publishedAt?.toISOString() || "desconocida"}
+
+Titulo:
+${content.title}
+${descriptionBlock}
+${transcriptBlock}
+`;
+  }
+
   async analyzeNews(content: SourceContent) {
     const settings = await SettingsService.getAll();
     let videoModeError: string | null = null;
-    const prompt = `${settings.basePrompt}
+    const basePrompt = `${settings.basePrompt}
 
 Idioma de salida: ${settings.outputLanguage}
 
@@ -310,16 +371,42 @@ ${content.transcript || "No disponible"}
     try {
       if (
         isYouTubeSourceType(content.source.type) &&
-        content.sourceUrl.includes("youtube.com/watch")
+        isYouTubeWatchUrl(content.sourceUrl)
       ) {
         try {
-          return await this.requestInteractionJson(prompt, content.sourceUrl, geminiNewsSchema);
+          return await this.requestInteractionJson(`${settings.basePrompt}\n\n${this.buildNewsPrompt(content, settings.outputLanguage, "video")}`, content.sourceUrl, geminiNewsSchema);
         } catch (videoError) {
           videoModeError = (videoError as Error).message;
         }
+
+        if (!hasUsefulTranscript(content)) {
+          const fallback = this.fallbackUnavailableVideoAnalysis(content, videoModeError);
+          return {
+            parsed: fallback,
+            raw: {
+              fallback: true,
+              provider: "local",
+              analysisUnavailable: true,
+              requiresVideoAnalysis: true,
+              geminiConfigured: Boolean(settings.geminiApiKey),
+              videoModeError,
+              reason: "No se pudo analizar el video con Gemini y no hay transcript suficiente. Se evita resumir la descripcion promocional."
+            }
+          };
+        }
+
+        const transcriptResult = await this.requestJson(`${settings.basePrompt}\n\n${this.buildNewsPrompt(content, settings.outputLanguage, "transcript")}`, geminiNewsSchema);
+        return {
+          ...transcriptResult,
+          raw: {
+            ...(typeof transcriptResult.raw === "object" && transcriptResult.raw ? transcriptResult.raw : { response: transcriptResult.raw }),
+            mode: "transcript_fallback_after_youtube_url_failure",
+            videoModeError
+          }
+        };
       }
 
-      const textResult = await this.requestJson(prompt, geminiNewsSchema);
+      const textResult = await this.requestJson(basePrompt, geminiNewsSchema);
       if (!videoModeError) return textResult;
       return {
         ...textResult,
@@ -400,6 +487,38 @@ ${JSON.stringify(candidate, null, 2)}
       telegramWorthy: false,
       telegramMessage: "",
       sourceReliability: "medium",
+      detectedLanguage: content.source.language
+    };
+  }
+
+  private fallbackUnavailableVideoAnalysis(content: SourceContent, reason: string | null): GeminiNewsAnalysis {
+    return {
+      title: content.title,
+      shortSummary: "Analisis pendiente: Gemini no ha podido acceder al video de YouTube y no hay transcript suficiente para generar un resumen fiable.",
+      longSummary: [
+        "No se ha generado resumen editorial porque la aplicacion no ha podido analizar el contenido real del video.",
+        "Para evitar informacion inutil o promocional, no se ha usado la descripcion de YouTube como sustituto del video.",
+        reason ? `Motivo tecnico: ${truncate(reason, 800)}` : "Motivo tecnico: no disponible."
+      ].join("\n\n"),
+      keyPoints: [
+        "Pendiente de reanalizar cuando Gemini tenga cuota/acceso operativo.",
+        "No se debe publicar ni enviar a Telegram hasta analizar video o transcript real."
+      ],
+      whyItMatters: "Sin acceso al video o a un transcript suficiente no se puede valorar la relevancia empresarial de forma fiable.",
+      businessApplications: ["Reprocesar con Gemini operativo o revisar manualmente el video antes de tomar decisiones."],
+      toolsMentioned: [],
+      companiesMentioned: [],
+      categories: [content.source.category],
+      tags: ["pendiente-analisis-video", "youtube"],
+      noveltyScore: 0,
+      relevanceScore: 0,
+      practicalityScore: 0,
+      urgencyScore: 0,
+      overallScore: 0,
+      recommendedAction: "review",
+      telegramWorthy: false,
+      telegramMessage: "",
+      sourceReliability: "low",
       detectedLanguage: content.source.language
     };
   }
