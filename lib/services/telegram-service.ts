@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { SettingsService } from "@/lib/services/settings-service";
 import { asStringArray } from "@/lib/utils";
+import type { JobProgressReporter } from "@/lib/types";
 
 function formatTags(tags: string[]) {
   return tags
@@ -180,9 +181,10 @@ export class TelegramService {
     }
   }
 
-  async sendPending() {
+  async sendPending(progress?: JobProgressReporter) {
     const settings = await SettingsService.getAll();
     if (!settings.telegramEnabled) {
+      await progress?.({ percent: 100, message: "El envio automatico a Telegram esta desactivado.", processedCount: 0, successCount: 0, failedCount: 0 });
       return { processedCount: 0, successCount: 0, failedCount: 0, metadata: { disabled: true } };
     }
 
@@ -197,16 +199,49 @@ export class TelegramService {
       take: 20
     });
 
+    if (!pending.length) {
+      await progress?.({ percent: 100, message: "No hay noticias pendientes para Telegram.", processedCount: 0, successCount: 0, failedCount: 0 });
+      return { processedCount: 0, successCount: 0, failedCount: 0 };
+    }
+
+    await progress?.({ percent: 8, message: `Preparando ${pending.length} envio(s) a Telegram...`, totalCount: pending.length });
+
     let successCount = 0;
     let failedCount = 0;
-    for (const item of pending) {
+    for (const [index, item] of pending.entries()) {
+      const processedCount = index + 1;
       try {
+        await progress?.({
+          percent: 10 + Math.round((index / pending.length) * 84),
+          message: `Enviando ${processedCount}/${pending.length}: ${item.title}`,
+          processedCount,
+          totalCount: pending.length,
+          successCount,
+          failedCount
+        });
         await this.sendNewsItem(item.id);
         successCount += 1;
       } catch {
         failedCount += 1;
       }
+      await progress?.({
+        percent: 10 + Math.round((processedCount / pending.length) * 84),
+        message: `Procesado envio ${processedCount}/${pending.length}`,
+        processedCount,
+        totalCount: pending.length,
+        successCount,
+        failedCount
+      });
     }
+
+    await progress?.({
+      percent: 96,
+      message: "Cerrando envios a Telegram...",
+      processedCount: pending.length,
+      totalCount: pending.length,
+      successCount,
+      failedCount
+    });
 
     return { processedCount: pending.length, successCount, failedCount };
   }

@@ -1,7 +1,5 @@
-import { PlayCircle, Send, Sparkles } from "lucide-react";
-import { runNewsJobAction, runTelegramPendingAction, runTrainingJobAction } from "@/lib/actions/admin-actions";
+import { JobRunner } from "@/components/admin/job-runner";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
@@ -30,37 +28,7 @@ export default async function JobsPage() {
         <LastRun title="Telegram" run={lastTelegram} />
       </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Ejecutar ahora</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <form action={runNewsJobAction}>
-            <Button type="submit">
-              <Sparkles className="h-4 w-4" aria-hidden />
-              Buscar noticias ahora
-            </Button>
-          </form>
-          <form action={runNewsJobAction}>
-            <Button type="submit" variant="outline">
-              <PlayCircle className="h-4 w-4" aria-hidden />
-              Analizar fuentes ahora
-            </Button>
-          </form>
-          <form action={runTrainingJobAction}>
-            <Button type="submit" variant="outline">
-              <PlayCircle className="h-4 w-4" aria-hidden />
-              Buscar formaciones ahora
-            </Button>
-          </form>
-          <form action={runTelegramPendingAction}>
-            <Button type="submit" variant="outline">
-              <Send className="h-4 w-4" aria-hidden />
-              Enviar pendientes a Telegram
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <JobRunner />
 
       <Card>
         <CardHeader>

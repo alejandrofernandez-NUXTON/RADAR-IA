@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { GeminiService } from "@/lib/services/gemini-service";
 import { LogService } from "@/lib/services/log-service";
-import type { JobResult, TrainingCandidate } from "@/lib/types";
+import type { JobProgressReporter, JobResult, TrainingCandidate } from "@/lib/types";
 
 export interface TrainingSearchProvider {
   name: string;
@@ -183,11 +183,18 @@ export class TrainingSearchService {
   private geminiService = new GeminiService();
   private providers: TrainingSearchProvider[] = [new ReputableCatalogProvider(), new FeedTrainingProvider()];
 
-  async runSearch(limit = 24): Promise<JobResult> {
+  async runSearch(limit = 24, progress?: JobProgressReporter): Promise<JobResult> {
     const candidates: TrainingCandidate[] = [];
 
-    for (const provider of this.providers) {
+    await progress?.({ percent: 5, message: `Consultando ${this.providers.length} proveedor(es) de formacion...`, totalCount: this.providers.length });
+
+    for (const [providerIndex, provider] of this.providers.entries()) {
       try {
+        await progress?.({
+          percent: 8 + Math.round((providerIndex / this.providers.length) * 28),
+          message: `Buscando recursos en ${provider.name}...`,
+          totalCount: this.providers.length
+        });
         const results = await provider.search(Math.ceil(limit / this.providers.length));
         candidates.push(...results);
       } catch (error) {
@@ -201,11 +208,50 @@ export class TrainingSearchService {
     let successCount = 0;
     let failedCount = 0;
 
-    for (const candidate of uniqueCandidates) {
+    if (!uniqueCandidates.length) {
+      await progress?.({ percent: 100, message: "No se encontraron formaciones nuevas.", processedCount: 0, successCount: 0, failedCount: 0 });
+      return {
+        processedCount: 0,
+        successCount,
+        failedCount,
+        metadata: { providers: this.providers.map((provider) => provider.name) }
+      };
+    }
+
+    await progress?.({
+      percent: 38,
+      message: `Evaluando ${uniqueCandidates.length} recurso(s) candidato(s)...`,
+      processedCount: 0,
+      totalCount: uniqueCandidates.length,
+      successCount,
+      failedCount
+    });
+
+    for (const [candidateIndex, candidate] of uniqueCandidates.entries()) {
       const existing = await prisma.trainingItem.findUnique({ where: { url: candidate.url } });
-      if (existing) continue;
+      const processedCount = candidateIndex + 1;
+      const percent = 40 + Math.round((processedCount / uniqueCandidates.length) * 54);
+      if (existing) {
+        await progress?.({
+          percent,
+          message: `Ya existia: ${candidate.title}`,
+          processedCount,
+          totalCount: uniqueCandidates.length,
+          successCount,
+          failedCount
+        });
+        continue;
+      }
 
       try {
+        await progress?.({
+          percent: Math.max(40, percent - 2),
+          message: `Evaluando ${processedCount}/${uniqueCandidates.length}: ${candidate.title}`,
+          processedCount,
+          totalCount: uniqueCandidates.length,
+          successCount,
+          failedCount
+        });
         const { parsed, raw } = await this.geminiService.evaluateTraining(candidate);
         await prisma.trainingItem.create({
           data: {
@@ -229,14 +275,39 @@ export class TrainingSearchService {
           }
         });
         successCount += 1;
+        await progress?.({
+          percent,
+          message: `Guardada formacion: ${parsed.title}`,
+          processedCount,
+          totalCount: uniqueCandidates.length,
+          successCount,
+          failedCount
+        });
       } catch (error) {
         failedCount += 1;
         await LogService.error("training.analysis", "No se pudo evaluar una formacion", {
           url: candidate.url,
           error: (error as Error).message
         });
+        await progress?.({
+          percent,
+          message: `Error evaluando ${candidate.title}`,
+          processedCount,
+          totalCount: uniqueCandidates.length,
+          successCount,
+          failedCount
+        });
       }
     }
+
+    await progress?.({
+      percent: 96,
+      message: "Cerrando busqueda de formaciones...",
+      processedCount: uniqueCandidates.length,
+      totalCount: uniqueCandidates.length,
+      successCount,
+      failedCount
+    });
 
     return {
       processedCount: uniqueCandidates.length,

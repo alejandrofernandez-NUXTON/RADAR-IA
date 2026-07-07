@@ -32,3 +32,14 @@ export type JobResult = {
   failedCount: number;
   metadata?: Record<string, unknown>;
 };
+
+export type JobProgress = {
+  percent: number;
+  message: string;
+  processedCount?: number;
+  totalCount?: number;
+  successCount?: number;
+  failedCount?: number;
+};
+
+export type JobProgressReporter = (progress: JobProgress) => void | Promise<void>;

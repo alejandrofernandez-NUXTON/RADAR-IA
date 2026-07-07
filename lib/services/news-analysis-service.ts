@@ -7,7 +7,7 @@ import { LogService } from "@/lib/services/log-service";
 import { SettingsService } from "@/lib/services/settings-service";
 import { SourceService } from "@/lib/services/source-service";
 import { TelegramService } from "@/lib/services/telegram-service";
-import type { JobResult, SourceContent } from "@/lib/types";
+import type { JobProgressReporter, JobResult, SourceContent } from "@/lib/types";
 
 const recommendedActionMap = {
   publish: RecommendedAction.PUBLISH,
@@ -36,20 +36,54 @@ export class NewsAnalysisService {
   private geminiService = new GeminiService();
   private telegramService = new TelegramService();
 
-  async processActiveSources(): Promise<JobResult> {
+  async processActiveSources(progress?: JobProgressReporter): Promise<JobResult> {
     const settings = await SettingsService.getAll();
     const sources = await this.sourceService.getActiveSources(settings.maxSourcesPerRun);
     let processedCount = 0;
     let successCount = 0;
     let failedCount = 0;
 
-    for (const source of sources) {
+    if (!sources.length) {
+      await progress?.({ percent: 100, message: "No hay fuentes activas para procesar.", processedCount: 0, successCount: 0, failedCount: 0 });
+      return { processedCount, successCount, failedCount, metadata: { sourceCount: 0 } };
+    }
+
+    await progress?.({ percent: 5, message: `Preparando ${sources.length} fuente(s) activa(s)...`, totalCount: sources.length });
+
+    for (const [sourceIndex, source] of sources.entries()) {
       try {
+        const sourceStartPercent = 8 + Math.round((sourceIndex / sources.length) * 82);
+        await progress?.({
+          percent: sourceStartPercent,
+          message: `Leyendo fuente ${sourceIndex + 1}/${sources.length}: ${source.name}`,
+          processedCount,
+          successCount,
+          failedCount,
+          totalCount: sources.length
+        });
         const contents = await this.sourceService.fetchContents(source, 5);
-        for (const content of contents) {
+        const totalContents = Math.max(contents.length, 1);
+        for (const [contentIndex, content] of contents.entries()) {
           processedCount += 1;
+          const percent = 8 + Math.round(((sourceIndex + (contentIndex + 0.5) / totalContents) / sources.length) * 82);
+          await progress?.({
+            percent,
+            message: `Analizando ${contentIndex + 1}/${contents.length} de ${source.name}`,
+            processedCount,
+            successCount,
+            failedCount,
+            totalCount: sources.length
+          });
           const result = await this.processContent(content);
           if (result.created) successCount += 1;
+          await progress?.({
+            percent: Math.min(94, percent + 3),
+            message: `Guardado resultado de ${content.title}`,
+            processedCount,
+            successCount,
+            failedCount,
+            totalCount: sources.length
+          });
         }
         await this.sourceService.markProcessed(source.id);
       } catch (error) {
@@ -60,6 +94,15 @@ export class NewsAnalysisService {
         });
       }
     }
+
+    await progress?.({
+      percent: 96,
+      message: "Cerrando ejecucion de noticias...",
+      processedCount,
+      successCount,
+      failedCount,
+      totalCount: sources.length
+    });
 
     return {
       processedCount,
@@ -185,8 +228,8 @@ export class NewsAnalysisService {
     }
   }
 
-  async sendPendingToTelegram(): Promise<JobResult> {
-    const result = await this.telegramService.sendPending();
+  async sendPendingToTelegram(progress?: JobProgressReporter): Promise<JobResult> {
+    const result = await this.telegramService.sendPending(progress);
     const failedMessages = await prisma.telegramMessage.count({ where: { status: TelegramStatus.FAILED } });
     return {
       ...result,
