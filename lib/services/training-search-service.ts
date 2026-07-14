@@ -190,6 +190,7 @@ export class TrainingSearchService {
 
     for (const [providerIndex, provider] of this.providers.entries()) {
       try {
+        progress?.throwIfCancelled?.();
         await progress?.({
           percent: 8 + Math.round((providerIndex / this.providers.length) * 28),
           message: `Buscando recursos en ${provider.name}...`,
@@ -198,6 +199,9 @@ export class TrainingSearchService {
         const results = await provider.search(Math.ceil(limit / this.providers.length));
         candidates.push(...results);
       } catch (error) {
+        if (progress?.signal?.aborted) {
+          throw new Error(typeof progress.signal.reason === "string" ? progress.signal.reason : "Proceso detenido manualmente.");
+        }
         await LogService.error("training.provider", `Error buscando formaciones en ${provider.name}`, {
           error: (error as Error).message
         });
@@ -228,6 +232,7 @@ export class TrainingSearchService {
     });
 
     for (const [candidateIndex, candidate] of uniqueCandidates.entries()) {
+      progress?.throwIfCancelled?.();
       const existing = await prisma.trainingItem.findUnique({ where: { url: candidate.url } });
       const processedCount = candidateIndex + 1;
       const percent = 40 + Math.round((processedCount / uniqueCandidates.length) * 54);
@@ -252,7 +257,7 @@ export class TrainingSearchService {
           successCount,
           failedCount
         });
-        const { parsed, raw } = await this.geminiService.evaluateTraining(candidate);
+        const { parsed, raw } = await this.geminiService.evaluateTraining(candidate, progress?.signal);
         await prisma.trainingItem.create({
           data: {
             title: parsed.title,
@@ -284,6 +289,9 @@ export class TrainingSearchService {
           failedCount
         });
       } catch (error) {
+        if (progress?.signal?.aborted) {
+          throw new Error(typeof progress.signal.reason === "string" ? progress.signal.reason : "Proceso detenido manualmente.");
+        }
         failedCount += 1;
         await LogService.error("training.analysis", "No se pudo evaluar una formacion", {
           url: candidate.url,

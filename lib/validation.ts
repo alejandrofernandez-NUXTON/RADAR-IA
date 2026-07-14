@@ -49,7 +49,14 @@ export type TrainingEvaluation = z.infer<typeof trainingEvaluationSchema>;
 
 export const sourceInputSchema = z.object({
   name: z.string().min(2).max(140),
-  type: z.enum(["YOUTUBE_VIDEO", "YOUTUBE_CHANNEL", "YOUTUBE_PLAYLIST", "RSS_FEED", "WEBSITE", "NEWSLETTER_MANUAL"]),
+  type: z.enum([
+    "YOUTUBE_VIDEO",
+    "YOUTUBE_CHANNEL",
+    "YOUTUBE_PLAYLIST",
+    "TWITTER_CHANNEL",
+    "TIKTOK_CHANNEL",
+    "INSTAGRAM_CHANNEL"
+  ]),
   url: z.string().url(),
   category: z.string().min(2).max(80),
   language: z.string().min(2).max(12).default("es"),
@@ -71,7 +78,24 @@ export const settingsInputSchema = z.object({
   telegramBotToken: z.string().optional(),
   telegramChatId: z.string().optional(),
   telegramTemplate: z.string().min(20),
+  xBearerToken: z.string().optional(),
   openaiApiKey: z.string().optional(),
   openaiModel: z.string().optional(),
   openaiEnabled: z.coerce.boolean().default(false)
+});
+
+const scheduleFrequency = z.enum(["hourly", "daily", "weekly"]);
+const scheduleTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const scheduleWeekday = z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]);
+
+export const jobSchedulesInputSchema = z.object({
+  collectFrequency: scheduleFrequency,
+  collectTime: scheduleTime,
+  collectWeekday: scheduleWeekday,
+  processFrequency: scheduleFrequency,
+  processTime: scheduleTime,
+  processWeekday: scheduleWeekday,
+  telegramFrequency: scheduleFrequency,
+  telegramTime: scheduleTime,
+  telegramWeekday: scheduleWeekday
 });

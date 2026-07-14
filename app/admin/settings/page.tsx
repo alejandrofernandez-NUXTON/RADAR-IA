@@ -14,11 +14,12 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default async function SettingsPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const saved = params.saved === "1";
-  const [settings, hasGemini, hasTelegramToken, hasTelegramChat, hasOpenAI] = await Promise.all([
+  const [settings, hasGemini, hasTelegramToken, hasTelegramChat, hasXBearerToken, hasOpenAI] = await Promise.all([
     SettingsService.getAll(),
     SettingsService.hasSecret("gemini.apiKey"),
     SettingsService.hasSecret("telegram.botToken"),
     SettingsService.hasSecret("telegram.chatId"),
+    SettingsService.hasSecret("x.bearerToken"),
     SettingsService.hasSecret("openai.apiKey")
   ]);
 
@@ -124,6 +125,30 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
             <Field label="Modelo OpenAI">
               <Input name="openaiModel" defaultValue={settings.openaiModel || ""} placeholder="gpt-4.1-mini" />
             </Field>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Redes sociales</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Field
+                label="X API Bearer Token"
+                hint={hasXBearerToken ? "Configurado. Deja vacio para conservarlo." : "Se guardara cifrado. Necesario para fuentes de tipo Canal de Twitter."}
+              >
+                <Input name="xBearerToken" type="password" placeholder={hasXBearerToken ? "Configurado" : "Bearer Token de X Developer"} />
+              </Field>
+            </div>
+            <div className="rounded-md border border-border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
+              <p className="font-medium text-foreground">Como configurar X/Twitter</p>
+              <p>
+                1. Crea o abre tu proyecto en X Developer Portal. 2. En la app del proyecto, copia el Bearer Token.
+                3. Pegalo aqui y guarda ajustes. 4. Crea una fuente de tipo Canal de Twitter con una URL como
+                https://x.com/OpenAI. 5. Ejecuta el job de noticias para probar la ultima publicacion del apartado de posts.
+              </p>
+            </div>
           </CardContent>
         </Card>
 

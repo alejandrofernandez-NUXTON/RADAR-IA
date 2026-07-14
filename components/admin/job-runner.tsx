@@ -1,11 +1,13 @@
 "use client";
 
-import { PlayCircle, Send, Sparkles } from "lucide-react";
+import { Brain, PlayCircle, Search, Send, Square } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { runStreamedJob, clampPercent, type ProgressPayload } from "@/lib/client/streamed-job";
+import { JOB_ENDPOINTS } from "@/lib/job-endpoints";
 import { cn } from "@/lib/utils";
 
 type JobButton = {
@@ -16,13 +18,10 @@ type JobButton = {
   icon: ReactNode;
 };
 
-type ProgressPayload = {
-  percent: number;
+type RunnerStep = {
   message: string;
-  processedCount?: number;
-  totalCount?: number;
-  successCount?: number;
-  failedCount?: number;
+  percent: number;
+  time: number;
 };
 
 type RunnerState = {
@@ -37,34 +36,35 @@ type RunnerState = {
   totalCount?: number;
   successCount?: number;
   failedCount?: number;
+  steps: RunnerStep[];
 };
 
 const jobs: JobButton[] = [
   {
-    id: "news-search",
-    label: "Buscar noticias ahora",
-    endpoint: "/api/jobs/news/run",
+    id: "source-collection",
+    label: "Recoger publicaciones ahora",
+    endpoint: JOB_ENDPOINTS.sourceCollection,
     variant: "primary",
-    icon: <Sparkles className="h-4 w-4" aria-hidden />
+    icon: <Search className="h-4 w-4" aria-hidden />
   },
   {
-    id: "news-analysis",
-    label: "Analizar fuentes ahora",
-    endpoint: "/api/jobs/news/run",
+    id: "news-processing",
+    label: "Procesar pendientes con Gemini",
+    endpoint: JOB_ENDPOINTS.newsProcessing,
     variant: "outline",
-    icon: <PlayCircle className="h-4 w-4" aria-hidden />
+    icon: <Brain className="h-4 w-4" aria-hidden />
   },
   {
     id: "training",
     label: "Buscar formaciones ahora",
-    endpoint: "/api/jobs/training/run",
+    endpoint: JOB_ENDPOINTS.trainingSearch,
     variant: "outline",
     icon: <PlayCircle className="h-4 w-4" aria-hidden />
   },
   {
     id: "telegram",
     label: "Enviar pendientes a Telegram",
-    endpoint: "/api/jobs/telegram/send-pending",
+    endpoint: JOB_ENDPOINTS.telegramPending,
     variant: "outline",
     icon: <Send className="h-4 w-4" aria-hidden />
   }
@@ -78,8 +78,9 @@ function formatDuration(ms: number) {
   return `${minutes}m ${rest}s`;
 }
 
-function clampPercent(value: number) {
-  return Math.max(0, Math.min(100, Math.round(value)));
+function appendStep(current: RunnerState, message: string, percent: number) {
+  if (current.steps.at(-1)?.message === message) return current.steps;
+  return [...current.steps, { message, percent, time: Date.now() }].slice(-8);
 }
 
 export function JobRunner() {
@@ -110,99 +111,133 @@ export function JobRunner() {
 
   async function runJob(job: JobButton) {
     const startedAt = Date.now();
+    const initialMessage = "Conectando con el job...";
     setState({
       jobId: job.id,
       label: job.label,
       status: "running",
       percent: 1,
-      message: "Conectando con el job...",
-      startedAt
+      message: initialMessage,
+      startedAt,
+      steps: [{ message: initialMessage, percent: 1, time: startedAt }]
     });
 
     try {
-      const response = await fetch(`${job.endpoint}?stream=1`, { method: "POST" });
-      if (!response.ok) throw new Error(`El servidor devolvio ${response.status}.`);
-      if (!response.body) throw new Error("El servidor no devolvio flujo de progreso.");
+      const jobResult = await runStreamedJob(job.endpoint, (progress: ProgressPayload) => {
+        const percent = clampPercent(progress.percent);
+        setState((current) =>
+          current
+            ? {
+                ...current,
+                percent,
+                message: progress.message,
+                processedCount: progress.processedCount,
+                totalCount: progress.totalCount,
+                successCount: progress.successCount,
+                failedCount: progress.failedCount,
+                steps: appendStep(current, progress.message, percent)
+              }
+            : current
+        );
+      });
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const event = JSON.parse(line) as {
-            type: "progress" | "complete" | "error";
-            progress?: ProgressPayload;
-            error?: string;
-            job?: {
-              status: string;
-              processedCount: number;
-              successCount: number;
-              failedCount: number;
-            };
-          };
-
-          if (event.type === "progress" && event.progress) {
-            const progress = event.progress;
-            setState((current) =>
-              current
-                ? {
-                    ...current,
-                    percent: clampPercent(progress.percent),
-                    message: progress.message,
-                    processedCount: progress.processedCount,
-                    totalCount: progress.totalCount,
-                    successCount: progress.successCount,
-                    failedCount: progress.failedCount
-                  }
-                : current
-            );
-          }
-
-          if (event.type === "complete" && event.job) {
-            const jobResult = event.job;
-            setState((current) =>
-              current
-                ? {
-                    ...current,
-                    status: jobResult.status === "FAILED" ? "failed" : "success",
-                    percent: 100,
-                    message: jobResult.status === "FAILED" ? "Job terminado con error." : "Job terminado.",
-                    finishedAt: Date.now(),
-                    processedCount: jobResult.processedCount,
-                    successCount: jobResult.successCount,
-                    failedCount: jobResult.failedCount
-                  }
-                : current
-            );
-          }
-
-          if (event.type === "error") {
-            throw new Error(event.error || "Error ejecutando el job.");
-          }
-        }
-      }
+      const message =
+        jobResult.status === "FAILED" && jobResult.errorMessage
+          ? jobResult.errorMessage
+          : jobResult.status === "FAILED"
+            ? "Job terminado con error."
+            : "Job terminado.";
+      setState((current) =>
+        current
+          ? {
+              ...current,
+              status: jobResult.status === "FAILED" ? "failed" : "success",
+              percent: 100,
+              message,
+              finishedAt: Date.now(),
+              processedCount: jobResult.processedCount,
+              successCount: jobResult.successCount,
+              failedCount: jobResult.failedCount,
+              steps: appendStep(current, message, 100)
+            }
+          : current
+      );
 
       router.refresh();
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Error ejecutando el job.";
       setState((current) =>
         current
           ? {
               ...current,
               status: "failed",
               percent: 100,
-              message: error instanceof Error ? error.message : "Error ejecutando el job.",
-              finishedAt: Date.now()
+              message,
+              finishedAt: Date.now(),
+              steps: appendStep(current, message, 100)
             }
           : current
+      );
+    }
+  }
+
+  async function stopAllJobs() {
+    setState((current) =>
+      current
+        ? {
+            ...current,
+            message: "Solicitando parada de procesos activos...",
+            steps: appendStep(current, "Solicitando parada de procesos activos...", current.percent)
+          }
+        : current
+    );
+
+    try {
+      const response = await fetch("/api/jobs/stop-all", { method: "POST" });
+      if (!response.ok) throw new Error(`El servidor devolvio ${response.status}.`);
+      const result = (await response.json()) as { cancelledCount?: number };
+      const message = result.cancelledCount
+        ? `Parada solicitada para ${result.cancelledCount} proceso(s).`
+        : "No habia procesos activos para parar.";
+      setState((current) =>
+        current
+          ? {
+              ...current,
+              message,
+              steps: appendStep(current, message, current.percent)
+            }
+          : {
+              jobId: "stop-all",
+              label: "Parar todo proceso",
+              status: "success",
+              percent: 100,
+              message,
+              startedAt: Date.now(),
+              finishedAt: Date.now(),
+              steps: [{ message, percent: 100, time: Date.now() }]
+            }
+      );
+      router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo solicitar la parada.";
+      setState((current) =>
+        current
+          ? {
+              ...current,
+              status: "failed",
+              message,
+              steps: appendStep(current, message, current.percent)
+            }
+          : {
+              jobId: "stop-all",
+              label: "Parar todo proceso",
+              status: "failed",
+              percent: 100,
+              message,
+              startedAt: Date.now(),
+              finishedAt: Date.now(),
+              steps: [{ message, percent: 100, time: Date.now() }]
+            }
       );
     }
   }
@@ -228,6 +263,10 @@ export function JobRunner() {
               {job.label}
             </Button>
           ))}
+          <Button type="button" variant="danger" onClick={() => void stopAllJobs()}>
+            <Square className="h-4 w-4" aria-hidden />
+            Parar todo proceso
+          </Button>
         </div>
 
         {state ? (
@@ -266,14 +305,31 @@ export function JobRunner() {
                 {timing ? (
                   <span>
                     Transcurrido: {timing.elapsed}
-                    {timing.remaining && state.status === "running" ? ` · Restante estimado: ${timing.remaining}` : null}
+                    {timing.remaining && state.status === "running" ? ` - Restante estimado: ${timing.remaining}` : null}
                   </span>
                 ) : null}
               </div>
             </div>
 
+            <div className="mt-4 border-t border-border pt-3">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Actividad</p>
+              <ol className="mt-2 space-y-1.5">
+                {state.steps.map((step) => (
+                  <li key={`${step.time}-${step.percent}-${step.message}`} className="flex gap-2 text-xs leading-5 text-muted-foreground">
+                    <span className="w-10 shrink-0 tabular-nums">{step.percent}%</span>
+                    <span>{step.message}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {typeof state.processedCount === "number" ? <span>{state.processedCount}{state.totalCount ? `/${state.totalCount}` : ""} procesados</span> : null}
+              {typeof state.processedCount === "number" ? (
+                <span>
+                  {state.processedCount}
+                  {state.totalCount ? `/${state.totalCount}` : ""} procesados
+                </span>
+              ) : null}
               {typeof state.successCount === "number" ? <span>{state.successCount} OK</span> : null}
               {typeof state.failedCount === "number" ? <span>{state.failedCount} errores</span> : null}
             </div>

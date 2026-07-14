@@ -1,5 +1,6 @@
 import { SourceType, type Source } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { SocialSourceService } from "@/lib/services/social-source-service";
 import { YouTubeService } from "@/lib/services/youtube-service";
 import type { SourceContent } from "@/lib/types";
 
@@ -21,6 +22,7 @@ function tagValue(xml: string, tag: string) {
 
 export class SourceService {
   private youtube = new YouTubeService();
+  private social = new SocialSourceService();
 
   async getActiveSources(limit: number) {
     return prisma.source.findMany({
@@ -36,6 +38,10 @@ export class SourceService {
     return this.fetchContents(source, maxItems);
   }
 
+  async fetchLatestContents(source: Source): Promise<SourceContent[]> {
+    return this.fetchContents(source, 1);
+  }
+
   async fetchContents(source: Source | null, maxItems = 5): Promise<SourceContent[]> {
     if (!source) return [];
 
@@ -49,6 +55,14 @@ export class SourceService {
 
     if (source.type === SourceType.YOUTUBE_CHANNEL) {
       return this.youtube.getChannelContents(source, maxItems);
+    }
+
+    if (
+      source.type === SourceType.TWITTER_CHANNEL ||
+      source.type === SourceType.TIKTOK_CHANNEL ||
+      source.type === SourceType.INSTAGRAM_CHANNEL
+    ) {
+      return this.social.getLatestChannelContent(source, maxItems);
     }
 
     if (source.type === SourceType.RSS_FEED) {

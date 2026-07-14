@@ -18,7 +18,10 @@ const themeScript = `
 
 export const metadata: Metadata = {
   title: "Radar IA",
-  description: "Radar interno de noticias y formaciones gratuitas de inteligencia artificial."
+  description: "Radar interno de noticias y formaciones gratuitas de inteligencia artificial.",
+  icons: {
+    icon: "/favicon.ico"
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

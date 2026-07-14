@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/server-auth";
-import { settingsInputSchema, sourceInputSchema } from "@/lib/validation";
+import { jobSchedulesInputSchema, settingsInputSchema, sourceInputSchema } from "@/lib/validation";
 import { SettingsService } from "@/lib/services/settings-service";
 import { JobService } from "@/lib/services/job-service";
 import { TelegramService } from "@/lib/services/telegram-service";
@@ -45,6 +45,7 @@ export async function saveSettingsAction(formData: FormData) {
     telegramBotToken: formString(formData, "telegramBotToken"),
     telegramChatId: formString(formData, "telegramChatId"),
     telegramTemplate: formString(formData, "telegramTemplate"),
+    xBearerToken: formString(formData, "xBearerToken"),
     openaiApiKey: formString(formData, "openaiApiKey"),
     openaiModel: formString(formData, "openaiModel"),
     openaiEnabled: formData.get("openaiEnabled") === "on"
@@ -65,10 +66,48 @@ export async function saveSettingsAction(formData: FormData) {
   if (input.geminiApiKey) await SettingsService.set("gemini.apiKey", input.geminiApiKey, true);
   if (input.telegramBotToken) await SettingsService.set("telegram.botToken", input.telegramBotToken, true);
   if (input.telegramChatId) await SettingsService.set("telegram.chatId", input.telegramChatId, true);
+  if (input.xBearerToken) await SettingsService.set("x.bearerToken", input.xBearerToken, true);
   if (input.openaiApiKey) await SettingsService.set("openai.apiKey", input.openaiApiKey, true);
 
   revalidatePath("/admin/settings");
   redirect("/admin/settings?saved=1");
+}
+
+export async function saveJobSchedulesAction(formData: FormData) {
+  await requireAdmin();
+  const input = jobSchedulesInputSchema.parse({
+    collectFrequency: formString(formData, "collectFrequency"),
+    collectTime: formString(formData, "collectTime"),
+    collectWeekday: formString(formData, "collectWeekday"),
+    processFrequency: formString(formData, "processFrequency"),
+    processTime: formString(formData, "processTime"),
+    processWeekday: formString(formData, "processWeekday"),
+    telegramFrequency: formString(formData, "telegramFrequency"),
+    telegramTime: formString(formData, "telegramTime"),
+    telegramWeekday: formString(formData, "telegramWeekday")
+  });
+
+  await SettingsService.set("jobs.collectFrequency", input.collectFrequency);
+  await SettingsService.set("jobs.collectTime", input.collectTime);
+  await SettingsService.set("jobs.collectWeekday", input.collectWeekday);
+  await SettingsService.set("jobs.processFrequency", input.processFrequency);
+  await SettingsService.set("jobs.processTime", input.processTime);
+  await SettingsService.set("jobs.processWeekday", input.processWeekday);
+  await SettingsService.set("jobs.telegramFrequency", input.telegramFrequency);
+  await SettingsService.set("jobs.telegramTime", input.telegramTime);
+  await SettingsService.set("jobs.telegramWeekday", input.telegramWeekday);
+
+  revalidatePath("/admin/jobs");
+  redirect("/admin/jobs?schedule=saved");
+}
+
+export async function toggleJobSchedulesEnabledAction(formData: FormData) {
+  await requireAdmin();
+  const enabled = formString(formData, "enabled") === "true";
+  await SettingsService.set("jobs.schedulesEnabled", String(enabled));
+  await LogService.info("jobs.schedules", enabled ? "Contadores automaticos reactivados" : "Contadores automaticos pausados");
+  revalidatePath("/admin/jobs");
+  redirect(`/admin/jobs?schedule=${enabled ? "enabled" : "paused"}`);
 }
 
 export async function createSourceAction(formData: FormData) {

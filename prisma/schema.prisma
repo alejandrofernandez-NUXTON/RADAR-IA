@@ -11,9 +11,19 @@ enum SourceType {
   YOUTUBE_VIDEO      @map("youtube_video")
   YOUTUBE_CHANNEL    @map("youtube_channel")
   YOUTUBE_PLAYLIST   @map("youtube_playlist")
+  TWITTER_CHANNEL    @map("twitter_channel")
+  TIKTOK_CHANNEL     @map("tiktok_channel")
+  INSTAGRAM_CHANNEL  @map("instagram_channel")
   RSS_FEED           @map("rss_feed")
   WEBSITE            @map("website")
   NEWSLETTER_MANUAL  @map("newsletter_manual")
+}
+
+enum CollectedItemStatus {
+  PENDING    @map("pending")
+  PROCESSED  @map("processed")
+  DISCARDED  @map("discarded")
+  ERROR      @map("error")
 }
 
 enum NewsStatus {
@@ -82,9 +92,34 @@ model Source {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   newsItems       NewsItem[]
+  collectedItems  CollectedSourceItem[]
 
   @@index([active, priority])
   @@index([type])
+}
+
+model CollectedSourceItem {
+  id            String              @id @default(cuid())
+  sourceId      String?
+  source        Source?             @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceUrl     String
+  contentHash   String              @unique
+  externalId    String?
+  title         String
+  author        String?
+  description   String?
+  transcript    String?
+  publishedAt   DateTime?
+  rawMetadata   Json?
+  status        CollectedItemStatus @default(PENDING)
+  processedAt   DateTime?
+  errorMessage  String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([sourceId, sourceUrl])
+  @@index([status, createdAt])
+  @@index([sourceId, createdAt])
 }
 
 model NewsItem {

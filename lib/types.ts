@@ -42,4 +42,7 @@ export type JobProgress = {
   failedCount?: number;
 };
 
-export type JobProgressReporter = (progress: JobProgress) => void | Promise<void>;
+export type JobProgressReporter = ((progress: JobProgress) => void | Promise<void>) & {
+  signal?: AbortSignal;
+  throwIfCancelled?: () => void;
+};

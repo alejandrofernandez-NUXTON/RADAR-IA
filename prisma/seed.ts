@@ -38,6 +38,16 @@ async function main() {
   await upsertSetting("app.outputLanguage", "es");
   await upsertSetting("jobs.updateFrequencyHours", "6");
   await upsertSetting("jobs.maxSourcesPerRun", "12");
+  await upsertSetting("jobs.timezone", "Europe/Madrid");
+  await upsertSetting("jobs.collectFrequency", "daily");
+  await upsertSetting("jobs.collectTime", "03:00");
+  await upsertSetting("jobs.collectWeekday", "monday");
+  await upsertSetting("jobs.processFrequency", "daily");
+  await upsertSetting("jobs.processTime", "03:30");
+  await upsertSetting("jobs.processWeekday", "monday");
+  await upsertSetting("jobs.telegramFrequency", "daily");
+  await upsertSetting("jobs.telegramTime", "04:00");
+  await upsertSetting("jobs.telegramWeekday", "monday");
   await upsertSetting("telegram.enabled", "false");
   await upsertSetting("telegram.messageTemplate", DEFAULT_TELEGRAM_TEMPLATE);
   await upsertSetting("openai.enabled", "false");

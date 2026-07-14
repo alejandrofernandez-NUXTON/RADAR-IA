@@ -8,8 +8,8 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   if (!(await isAuthorizedInternalRequest(request))) return unauthorized();
   if (request.nextUrl.searchParams.get("stream") === "1") {
-    return streamJob((progress) => new JobService().runTelegramPendingJob(progress, { ignoreAutoDisabled: true }));
+    return streamJob((progress) => new JobService().runNewsProcessingJob(progress));
   }
-  const job = await new JobService().runTelegramPendingJob(undefined, { ignoreAutoDisabled: true });
+  const job = await new JobService().runNewsProcessingJob();
   return NextResponse.json(job);
 }

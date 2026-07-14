@@ -10,6 +10,17 @@ const defaults = {
   "app.outputLanguage": "es",
   "jobs.updateFrequencyHours": "6",
   "jobs.maxSourcesPerRun": "12",
+  "jobs.timezone": "Europe/Madrid",
+  "jobs.collectFrequency": "daily",
+  "jobs.collectTime": "03:00",
+  "jobs.collectWeekday": "monday",
+  "jobs.processFrequency": "daily",
+  "jobs.processTime": "03:30",
+  "jobs.processWeekday": "monday",
+  "jobs.telegramFrequency": "daily",
+  "jobs.telegramTime": "04:00",
+  "jobs.telegramWeekday": "monday",
+  "jobs.schedulesEnabled": "true",
   "telegram.enabled": "false",
   "telegram.messageTemplate": DEFAULT_TELEGRAM_TEMPLATE,
   "openai.enabled": "false",
@@ -20,6 +31,7 @@ const envFallbacks: Record<string, string | undefined> = {
   "gemini.apiKey": process.env.GEMINI_API_KEY,
   "telegram.botToken": process.env.TELEGRAM_BOT_TOKEN,
   "telegram.chatId": process.env.TELEGRAM_CHAT_ID,
+  "x.bearerToken": process.env.X_BEARER_TOKEN,
   "openai.apiKey": process.env.OPENAI_API_KEY
 };
 
@@ -32,13 +44,39 @@ export type AppSettings = {
   outputLanguage: string;
   updateFrequencyHours: number;
   maxSourcesPerRun: number;
+  timezone: string;
+  jobSchedules: JobSchedules;
+  jobSchedulesEnabled: boolean;
   telegramEnabled: boolean;
   telegramBotToken: string | null;
   telegramChatId: string | null;
   telegramTemplate: string;
+  xBearerToken: string | null;
   openaiApiKey: string | null;
   openaiModel: string;
   openaiEnabled: boolean;
+};
+
+export type ScheduleFrequency = "hourly" | "daily" | "weekly";
+
+export type JobScheduleConfig = {
+  frequency: ScheduleFrequency;
+  time: string;
+  weekday: string;
+};
+
+export type JobSchedules = {
+  collect: JobScheduleConfig;
+  process: JobScheduleConfig;
+  telegram: JobScheduleConfig;
+};
+
+export type JobScheduleKey = keyof JobSchedules;
+
+const scheduleSettingKeys: Record<JobScheduleKey, string[]> = {
+  collect: ["jobs.collectFrequency", "jobs.collectTime", "jobs.collectWeekday"],
+  process: ["jobs.processFrequency", "jobs.processTime", "jobs.processWeekday"],
+  telegram: ["jobs.telegramFrequency", "jobs.telegramTime", "jobs.telegramWeekday"]
 };
 
 export class SettingsService {
@@ -88,13 +126,65 @@ export class SettingsService {
       outputLanguage: await this.getString("app.outputLanguage", "es"),
       updateFrequencyHours: await this.getNumber("jobs.updateFrequencyHours", 6),
       maxSourcesPerRun: await this.getNumber("jobs.maxSourcesPerRun", 12),
+      timezone: await this.getString("jobs.timezone", "Europe/Madrid"),
+      jobSchedules: await this.getJobSchedules(),
+      jobSchedulesEnabled: await this.getBoolean("jobs.schedulesEnabled", true),
       telegramEnabled: await this.getBoolean("telegram.enabled", false),
       telegramBotToken: await this.getRaw("telegram.botToken"),
       telegramChatId: await this.getRaw("telegram.chatId"),
       telegramTemplate: await this.getString("telegram.messageTemplate", DEFAULT_TELEGRAM_TEMPLATE),
+      xBearerToken: await this.getRaw("x.bearerToken"),
       openaiApiKey: await this.getRaw("openai.apiKey"),
       openaiModel: await this.getString("openai.model", ""),
       openaiEnabled: await this.getBoolean("openai.enabled", false)
     };
+  }
+
+  static async getJobSchedules(): Promise<JobSchedules> {
+    return {
+      collect: {
+        frequency: (await this.getString("jobs.collectFrequency", "daily")) as ScheduleFrequency,
+        time: await this.getString("jobs.collectTime", "03:00"),
+        weekday: await this.getString("jobs.collectWeekday", "monday")
+      },
+      process: {
+        frequency: (await this.getString("jobs.processFrequency", "daily")) as ScheduleFrequency,
+        time: await this.getString("jobs.processTime", "03:30"),
+        weekday: await this.getString("jobs.processWeekday", "monday")
+      },
+      telegram: {
+        frequency: (await this.getString("jobs.telegramFrequency", "daily")) as ScheduleFrequency,
+        time: await this.getString("jobs.telegramTime", "04:00"),
+        weekday: await this.getString("jobs.telegramWeekday", "monday")
+      }
+    };
+  }
+
+  static async getJobScheduleSavedStates() {
+    const entries = await Promise.all(
+      (Object.keys(scheduleSettingKeys) as JobScheduleKey[]).map(async (key) => {
+        const settings = await prisma.setting.findMany({
+          where: { key: { in: scheduleSettingKeys[key] } },
+          select: { key: true, value: true, updatedAt: true }
+        });
+        const values = new Map(settings.map((setting) => [setting.key, setting]));
+        const saved = scheduleSettingKeys[key].every((settingKey) => Boolean(values.get(settingKey)?.value));
+        const savedAt = saved
+          ? settings.reduce<Date | null>((latest, setting) => {
+              if (!latest || setting.updatedAt > latest) return setting.updatedAt;
+              return latest;
+            }, null)
+          : null;
+
+        return [key, { saved, savedAt }] as const;
+      })
+    );
+
+    return Object.fromEntries(entries) as Record<JobScheduleKey, { saved: boolean; savedAt: Date | null }>;
+  }
+
+  static async hasJobSchedule(key: JobScheduleKey) {
+    const states = await this.getJobScheduleSavedStates();
+    return states[key].saved;
   }
 }

@@ -79,6 +79,19 @@ function summarizeModelFailures(context: string, failures: ModelFailure[]) {
     .join(" | ")}`;
 }
 
+function requestSignal(timeoutMs: number, signal?: AbortSignal) {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  if (!signal) return timeout;
+  if (signal.aborted) return signal;
+  return AbortSignal.any([timeout, signal]);
+}
+
+function cancellationError(signal?: AbortSignal) {
+  if (!signal?.aborted) return null;
+  const reason = typeof signal.reason === "string" ? signal.reason : "Proceso detenido manualmente.";
+  return new Error(reason);
+}
+
 function extractJson(text: string) {
   const cleaned = text
     .trim()
@@ -141,7 +154,14 @@ export class GeminiService {
     throw new Error(summarizeModelFailures("Gemini", failures));
   }
 
-  private async requestTextOnce(prompt: string, model: string, apiKey: string, timeoutMs = 75_000, temperature = 0.2): Promise<GeminiTextResult> {
+  private async requestTextOnce(
+    prompt: string,
+    model: string,
+    apiKey: string,
+    timeoutMs = 75_000,
+    temperature = 0.2,
+    signal?: AbortSignal
+  ): Promise<GeminiTextResult> {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/${modelPath(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     const response = await fetch(endpoint, {
@@ -159,7 +179,7 @@ export class GeminiService {
           responseMimeType: "application/json"
         }
       }),
-      signal: AbortSignal.timeout(timeoutMs)
+      signal: requestSignal(timeoutMs, signal)
     });
     if (!response.ok) {
       throw new Error(`Gemini ${model} failed with ${response.status}: ${await readErrorMessage(response)}`);
@@ -171,7 +191,7 @@ export class GeminiService {
     return { text, model, raw: payload };
   }
 
-  private async requestText(prompt: string) {
+  private async requestText(prompt: string, signal?: AbortSignal) {
     const settings = await SettingsService.getAll();
     if (!settings.geminiApiKey) {
       throw new Error("Gemini API key is not configured.");
@@ -180,8 +200,10 @@ export class GeminiService {
     const failures: ModelFailure[] = [];
     for (const model of modelCandidates(settings.geminiModel)) {
       try {
-        return await this.requestTextOnce(prompt, model, settings.geminiApiKey);
+        return await this.requestTextOnce(prompt, model, settings.geminiApiKey, 75_000, 0.2, signal);
       } catch (error) {
+        const cancelled = cancellationError(signal);
+        if (cancelled) throw cancelled;
         failures.push({ model, message: (error as Error).message });
       }
     }
@@ -189,13 +211,13 @@ export class GeminiService {
     throw new Error(summarizeModelFailures("Gemini text generation", failures));
   }
 
-  private async requestJson<T>(prompt: string, schema: z.ZodType<T>) {
-    const first = await this.requestText(prompt);
+  private async requestJson<T>(prompt: string, schema: z.ZodType<T>, signal?: AbortSignal) {
+    const first = await this.requestText(prompt, signal);
     try {
       return { parsed: parseOrThrow(first.text, schema), raw: { model: first.model, response: JSON.parse(extractJson(first.text)) as unknown } };
     } catch (firstError) {
       const repairPrompt = `Corrige el siguiente contenido para que sea JSON valido y respete exactamente el schema solicitado. Devuelve solo JSON.\n\n${first.text}`;
-      const repaired = await this.requestText(repairPrompt);
+      const repaired = await this.requestText(repairPrompt, signal);
       try {
         return {
           parsed: parseOrThrow(repaired.text, schema),
@@ -221,7 +243,13 @@ export class GeminiService {
     return text || "";
   }
 
-  private async requestInteractionOnce(prompt: string, videoUrl: string, model: string, apiKey: string): Promise<GeminiTextResult> {
+  private async requestInteractionOnce(
+    prompt: string,
+    videoUrl: string,
+    model: string,
+    apiKey: string,
+    signal?: AbortSignal
+  ): Promise<GeminiTextResult> {
     const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
       method: "POST",
       headers: {
@@ -235,7 +263,7 @@ export class GeminiService {
           { type: "text", text: prompt }
         ]
       }),
-      signal: AbortSignal.timeout(120_000)
+      signal: requestSignal(120_000, signal)
     });
 
     if (!response.ok) {
@@ -248,7 +276,7 @@ export class GeminiService {
     return { text, model: normalizeModelName(model), raw: payload };
   }
 
-  private async requestInteractionText(prompt: string, videoUrl: string) {
+  private async requestInteractionText(prompt: string, videoUrl: string, signal?: AbortSignal) {
     const settings = await SettingsService.getAll();
     if (!settings.geminiApiKey) {
       throw new Error("Gemini API key is not configured.");
@@ -257,8 +285,10 @@ export class GeminiService {
     const failures: ModelFailure[] = [];
     for (const model of modelCandidates(settings.geminiModel)) {
       try {
-        return await this.requestInteractionOnce(prompt, videoUrl, model, settings.geminiApiKey);
+        return await this.requestInteractionOnce(prompt, videoUrl, model, settings.geminiApiKey, signal);
       } catch (error) {
+        const cancelled = cancellationError(signal);
+        if (cancelled) throw cancelled;
         failures.push({ model, message: (error as Error).message });
       }
     }
@@ -266,15 +296,15 @@ export class GeminiService {
     throw new Error(summarizeModelFailures("Gemini video analysis", failures));
   }
 
-  private async requestInteractionJson<T>(prompt: string, videoUrl: string, schema: z.ZodType<T>) {
-    const first = await this.requestInteractionText(prompt, videoUrl);
+  private async requestInteractionJson<T>(prompt: string, videoUrl: string, schema: z.ZodType<T>, signal?: AbortSignal) {
+    const first = await this.requestInteractionText(prompt, videoUrl, signal);
     try {
       return {
         parsed: parseOrThrow(first.text, schema),
         raw: { model: first.model, mode: "youtube_url", response: first.raw }
       };
     } catch (firstError) {
-      const repaired = await this.requestText(`Corrige este contenido para que sea JSON valido. Devuelve solo JSON.\n\n${first.text}`);
+      const repaired = await this.requestText(`Corrige este contenido para que sea JSON valido. Devuelve solo JSON.\n\n${first.text}`, signal);
       try {
         return {
           parsed: parseOrThrow(repaired.text, schema),
@@ -344,7 +374,7 @@ ${transcriptBlock}
 `;
   }
 
-  async analyzeNews(content: SourceContent) {
+  async analyzeNews(content: SourceContent, signal?: AbortSignal) {
     const settings = await SettingsService.getAll();
     let videoModeError: string | null = null;
     const basePrompt = `${settings.basePrompt}
@@ -374,7 +404,12 @@ ${content.transcript || "No disponible"}
         isYouTubeWatchUrl(content.sourceUrl)
       ) {
         try {
-          return await this.requestInteractionJson(`${settings.basePrompt}\n\n${this.buildNewsPrompt(content, settings.outputLanguage, "video")}`, content.sourceUrl, geminiNewsSchema);
+          return await this.requestInteractionJson(
+            `${settings.basePrompt}\n\n${this.buildNewsPrompt(content, settings.outputLanguage, "video")}`,
+            content.sourceUrl,
+            geminiNewsSchema,
+            signal
+          );
         } catch (videoError) {
           videoModeError = (videoError as Error).message;
         }
@@ -395,7 +430,11 @@ ${content.transcript || "No disponible"}
           };
         }
 
-        const transcriptResult = await this.requestJson(`${settings.basePrompt}\n\n${this.buildNewsPrompt(content, settings.outputLanguage, "transcript")}`, geminiNewsSchema);
+        const transcriptResult = await this.requestJson(
+          `${settings.basePrompt}\n\n${this.buildNewsPrompt(content, settings.outputLanguage, "transcript")}`,
+          geminiNewsSchema,
+          signal
+        );
         return {
           ...transcriptResult,
           raw: {
@@ -406,7 +445,7 @@ ${content.transcript || "No disponible"}
         };
       }
 
-      const textResult = await this.requestJson(basePrompt, geminiNewsSchema);
+      const textResult = await this.requestJson(basePrompt, geminiNewsSchema, signal);
       if (!videoModeError) return textResult;
       return {
         ...textResult,
@@ -417,6 +456,8 @@ ${content.transcript || "No disponible"}
         }
       };
     } catch (error) {
+      const cancelled = cancellationError(signal);
+      if (cancelled) throw cancelled;
       const fallback = this.fallbackNewsAnalysis(content);
       return {
         parsed: fallback,
@@ -431,7 +472,7 @@ ${content.transcript || "No disponible"}
     }
   }
 
-  async evaluateTraining(candidate: TrainingCandidate) {
+  async evaluateTraining(candidate: TrainingCandidate, signal?: AbortSignal) {
     const settings = await SettingsService.getAll();
     const prompt = `${DEFAULT_TRAINING_ANALYSIS_PROMPT}
 
@@ -442,8 +483,10 @@ ${JSON.stringify(candidate, null, 2)}
 `;
 
     try {
-      return await this.requestJson(prompt, trainingEvaluationSchema);
+      return await this.requestJson(prompt, trainingEvaluationSchema, signal);
     } catch (error) {
+      const cancelled = cancellationError(signal);
+      if (cancelled) throw cancelled;
       const fallback = this.fallbackTrainingEvaluation(candidate);
       return {
         parsed: fallback,

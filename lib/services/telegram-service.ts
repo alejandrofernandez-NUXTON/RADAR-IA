@@ -181,11 +181,21 @@ export class TelegramService {
     }
   }
 
-  async sendPending(progress?: JobProgressReporter) {
+  async sendPending(progress?: JobProgressReporter, options: { ignoreAutoDisabled?: boolean } = {}) {
     const settings = await SettingsService.getAll();
-    if (!settings.telegramEnabled) {
+    if (!settings.telegramEnabled && !options.ignoreAutoDisabled) {
       await progress?.({ percent: 100, message: "El envio automatico a Telegram esta desactivado.", processedCount: 0, successCount: 0, failedCount: 0 });
       return { processedCount: 0, successCount: 0, failedCount: 0, metadata: { disabled: true } };
+    }
+
+    if (!settings.telegramEnabled && options.ignoreAutoDisabled) {
+      await progress?.({
+        percent: 4,
+        message: "Envio manual iniciado. El envio automatico esta desactivado, pero este boton lo ignora.",
+        processedCount: 0,
+        successCount: 0,
+        failedCount: 0
+      });
     }
 
     const pending = await prisma.newsItem.findMany({
@@ -200,7 +210,13 @@ export class TelegramService {
     });
 
     if (!pending.length) {
-      await progress?.({ percent: 100, message: "No hay noticias pendientes para Telegram.", processedCount: 0, successCount: 0, failedCount: 0 });
+      await progress?.({
+        percent: 100,
+        message: "No hay noticias pendientes que cumplan criterios: publicadas, telegramWorthy, score suficiente y sin envio previo.",
+        processedCount: 0,
+        successCount: 0,
+        failedCount: 0
+      });
       return { processedCount: 0, successCount: 0, failedCount: 0 };
     }
 
@@ -209,6 +225,7 @@ export class TelegramService {
     let successCount = 0;
     let failedCount = 0;
     for (const [index, item] of pending.entries()) {
+      progress?.throwIfCancelled?.();
       const processedCount = index + 1;
       try {
         await progress?.({
@@ -222,6 +239,9 @@ export class TelegramService {
         await this.sendNewsItem(item.id);
         successCount += 1;
       } catch {
+        if (progress?.signal?.aborted) {
+          throw new Error(typeof progress.signal.reason === "string" ? progress.signal.reason : "Proceso detenido manualmente.");
+        }
         failedCount += 1;
       }
       await progress?.({

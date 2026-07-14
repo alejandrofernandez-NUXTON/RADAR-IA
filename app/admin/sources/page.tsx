@@ -10,13 +10,15 @@ import { formatDate } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 const sourceTypes = [
-  ["YOUTUBE_VIDEO", "YouTube video"],
-  ["YOUTUBE_CHANNEL", "YouTube channel"],
-  ["YOUTUBE_PLAYLIST", "YouTube playlist"],
-  ["RSS_FEED", "RSS feed"],
-  ["WEBSITE", "Website"],
-  ["NEWSLETTER_MANUAL", "Newsletter/manual futuro"]
+  ["YOUTUBE_VIDEO", "Video de YouTube"],
+  ["YOUTUBE_CHANNEL", "Canal de YouTube"],
+  ["YOUTUBE_PLAYLIST", "Playlist de YouTube"],
+  ["TWITTER_CHANNEL", "Canal de Twitter"],
+  ["TIKTOK_CHANNEL", "Canal de TikTok"],
+  ["INSTAGRAM_CHANNEL", "Canal de Instagram"]
 ] as const;
+
+const sourceTypeLabels = Object.fromEntries(sourceTypes) as Record<string, string>;
 
 export default async function SourcesPage() {
   const sources = await prisma.source.findMany({
@@ -27,7 +29,7 @@ export default async function SourcesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-normal">Fuentes</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Gestiona videos, playlists, canales y fuentes preparadas para RSS o web.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Gestiona videos y canales que el sistema revisara automaticamente.</p>
       </div>
 
       <Card>
@@ -49,7 +51,7 @@ export default async function SourcesPage() {
               </Select>
             </Field>
             <Field label="URL">
-              <Input name="url" type="url" required placeholder="https://www.youtube.com/watch?v=..." />
+              <Input name="url" type="url" required placeholder="https://www.youtube.com/watch?v=... o https://www.instagram.com/..." />
             </Field>
             <Field label="Categoria">
               <Input name="category" required placeholder="agentes, productividad, modelos..." />
@@ -103,7 +105,7 @@ export default async function SourcesPage() {
                         {source.url}
                       </a>
                     </td>
-                    <td className="py-3">{source.type}</td>
+                    <td className="py-3">{sourceTypeLabels[source.type] || source.type}</td>
                     <td className="py-3">{source.category}</td>
                     <td className="py-3">{source.priority}</td>
                     <td className="py-3">
