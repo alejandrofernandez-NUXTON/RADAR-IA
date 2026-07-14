@@ -42,9 +42,26 @@ export async function saveSettingsAction(formData: FormData) {
     updateFrequencyHours: formData.get("updateFrequencyHours"),
     maxSourcesPerRun: formData.get("maxSourcesPerRun"),
     telegramEnabled: formData.get("telegramEnabled") === "on",
+    telegramDeliveryMode: formString(formData, "telegramDeliveryMode"),
     telegramBotToken: formString(formData, "telegramBotToken"),
     telegramChatId: formString(formData, "telegramChatId"),
     telegramTemplate: formString(formData, "telegramTemplate"),
+    videoEnabled: formData.get("videoEnabled") === "on",
+    videoMaxNewsItems: formData.get("videoMaxNewsItems"),
+    videoMaxOpenDigests: formData.get("videoMaxOpenDigests"),
+    videoTargetDurationSeconds: formData.get("videoTargetDurationSeconds"),
+    videoWidth: formData.get("videoWidth"),
+    videoHeight: formData.get("videoHeight"),
+    videoFps: formData.get("videoFps"),
+    videoLanguage: formString(formData, "videoLanguage"),
+    videoTtsProvider: formString(formData, "videoTtsProvider"),
+    videoTtsModel: formString(formData, "videoTtsModel"),
+    videoTtsVoice: formString(formData, "videoTtsVoice"),
+    videoSubtitlesEnabled: formData.get("videoSubtitlesEnabled") === "on",
+    videoOutputDirectory: formString(formData, "videoOutputDirectory"),
+    videoKeepTempFiles: formData.get("videoKeepTempFiles") === "on",
+    videoRetentionDays: formData.get("videoRetentionDays"),
+    videoFailedRetentionDays: formData.get("videoFailedRetentionDays"),
     xBearerToken: formString(formData, "xBearerToken"),
     openaiApiKey: formString(formData, "openaiApiKey"),
     openaiModel: formString(formData, "openaiModel"),
@@ -59,7 +76,24 @@ export async function saveSettingsAction(formData: FormData) {
   await SettingsService.set("jobs.updateFrequencyHours", String(input.updateFrequencyHours));
   await SettingsService.set("jobs.maxSourcesPerRun", String(input.maxSourcesPerRun));
   await SettingsService.set("telegram.enabled", String(input.telegramEnabled));
+  await SettingsService.set("telegram.deliveryMode", input.telegramDeliveryMode);
   await SettingsService.set("telegram.messageTemplate", input.telegramTemplate);
+  await SettingsService.set("video.enabled", String(input.videoEnabled));
+  await SettingsService.set("video.maxNewsItems", String(input.videoMaxNewsItems));
+  await SettingsService.set("video.maxOpenDigests", String(input.videoMaxOpenDigests));
+  await SettingsService.set("video.targetDurationSeconds", String(input.videoTargetDurationSeconds));
+  await SettingsService.set("video.width", String(input.videoWidth));
+  await SettingsService.set("video.height", String(input.videoHeight));
+  await SettingsService.set("video.fps", String(input.videoFps));
+  await SettingsService.set("video.language", input.videoLanguage);
+  await SettingsService.set("video.ttsProvider", input.videoTtsProvider);
+  await SettingsService.set("video.ttsModel", input.videoTtsModel);
+  await SettingsService.set("video.ttsVoice", input.videoTtsVoice);
+  await SettingsService.set("video.subtitlesEnabled", String(input.videoSubtitlesEnabled));
+  await SettingsService.set("video.outputDirectory", input.videoOutputDirectory);
+  await SettingsService.set("video.keepTempFiles", String(input.videoKeepTempFiles));
+  await SettingsService.set("video.retentionDays", String(input.videoRetentionDays));
+  await SettingsService.set("video.failedRetentionDays", String(input.videoFailedRetentionDays));
   await SettingsService.set("openai.enabled", String(input.openaiEnabled));
   await SettingsService.set("openai.model", input.openaiModel || "");
 
@@ -171,6 +205,14 @@ export async function setNewsStatusAction(formData: FormData) {
   const id = formString(formData, "id");
   const status = formString(formData, "status") as keyof typeof NewsStatus;
   if (!NewsStatus[status]) return;
+  const reserved = await prisma.newsItem.findUnique({ where: { id }, select: { videoDigestReservationId: true } });
+  if (reserved?.videoDigestReservationId && NewsStatus[status] !== NewsStatus.PUBLISHED) {
+    await LogService.warn("news.reserved", "Cambio editorial bloqueado porque la noticia esta reservada.", {
+      newsItemId: id,
+      videoDigestId: reserved.videoDigestReservationId
+    });
+    return;
+  }
 
   await prisma.newsItem.update({
     where: { id },
@@ -199,8 +241,16 @@ export async function deleteNewsAction(formData: FormData) {
   const id = formString(formData, "id");
   if (!id) return;
 
-  const item = await prisma.newsItem.findUnique({ where: { id }, select: { id: true, title: true } });
+  const item = await prisma.newsItem.findUnique({ where: { id }, select: { id: true, title: true, videoDigestReservationId: true } });
   if (!item) {
+    revalidatePath("/admin/news");
+    return;
+  }
+  if (item.videoDigestReservationId) {
+    await LogService.warn("news.delete", "Eliminacion bloqueada porque la noticia esta reservada.", {
+      newsItemId: id,
+      videoDigestId: item.videoDigestReservationId
+    });
     revalidatePath("/admin/news");
     return;
   }
@@ -257,6 +307,14 @@ export async function sendNewsToTelegramAction(formData: FormData) {
 export async function reprocessNewsAction(formData: FormData) {
   await requireAdmin();
   const id = formString(formData, "id");
+  const reserved = await prisma.newsItem.findUnique({ where: { id }, select: { videoDigestReservationId: true } });
+  if (reserved?.videoDigestReservationId) {
+    await LogService.warn("news.reprocess", "Reprocesado bloqueado porque la noticia esta reservada.", {
+      newsItemId: id,
+      videoDigestId: reserved.videoDigestReservationId
+    });
+    return;
+  }
   await new NewsAnalysisService().reprocessNewsItem(id);
   revalidatePath("/admin/news");
   redirect("/admin/news");

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { ArrowUpRight, RefreshCcw, Send } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Film, RefreshCcw, Send } from "lucide-react";
 import {
   reprocessNewsAction,
   sendNewsToTelegramAction,
@@ -23,7 +23,12 @@ export default async function AdminNewsDetailPage({ params, searchParams }: { pa
   const saved = (await searchParams).saved === "1";
   const item = await prisma.newsItem.findUnique({
     where: { id },
-    include: { source: true, telegramMessages: { orderBy: { createdAt: "desc" } } }
+    include: {
+      source: true,
+      telegramMessages: { orderBy: { createdAt: "desc" } },
+      videoDigestReservation: { select: { id: true, status: true, title: true } },
+      videoDigestItems: { include: { videoDigest: { select: { id: true, status: true, title: true } } }, orderBy: { createdAt: "desc" } }
+    }
   });
   if (!item) notFound();
 
@@ -44,6 +49,17 @@ export default async function AdminNewsDetailPage({ params, searchParams }: { pa
           <ArrowUpRight className="h-4 w-4" aria-hidden />
         </ButtonLink>
       </div>
+
+      {item.videoDigestReservation ? (
+        <div className="flex gap-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-medium">Reservada para un video en estado {statusLabel(item.videoDigestReservation.status)}</p>
+            <p className="mt-1 text-amber-800">Puedes editar el contenido, pero el video quedara desactualizado y debera regenerarse. El envio individual, descarte, reprocesado y borrado estan bloqueados.</p>
+            <ButtonLink href={`/admin/videos/${item.videoDigestReservation.id}`} variant="outline" size="sm" className="mt-3"><Film className="h-4 w-4" />Ver video relacionado</ButtonLink>
+          </div>
+        </div>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -90,25 +106,39 @@ export default async function AdminNewsDetailPage({ params, searchParams }: { pa
           <CardTitle>Acciones</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          <StatusButton id={item.id} status="PUBLISHED" label="Aprobar" />
-          <StatusButton id={item.id} status="DISCARDED" label="Descartar" />
-          <StatusButton id={item.id} status="REVIEW" label="Marcar pendiente" />
+          <StatusButton id={item.id} status="PUBLISHED" label="Aprobar" disabled={Boolean(item.videoDigestReservationId)} />
+          <StatusButton id={item.id} status="DISCARDED" label="Descartar" disabled={Boolean(item.videoDigestReservationId)} />
+          <StatusButton id={item.id} status="REVIEW" label="Marcar pendiente" disabled={Boolean(item.videoDigestReservationId)} />
           <form action={sendNewsToTelegramAction}>
             <input type="hidden" name="id" value={item.id} />
-            <Button variant="outline" type="submit">
+            <Button variant="outline" type="submit" disabled={Boolean(item.videoDigestReservationId)}>
               <Send className="h-4 w-4" aria-hidden />
               Enviar a Telegram
             </Button>
           </form>
           <form action={reprocessNewsAction}>
             <input type="hidden" name="id" value={item.id} />
-            <Button variant="outline" type="submit">
+            <Button variant="outline" type="submit" disabled={Boolean(item.videoDigestReservationId)}>
               <RefreshCcw className="h-4 w-4" aria-hidden />
               Reprocesar con Gemini
             </Button>
           </form>
         </CardContent>
       </Card>
+
+      {item.videoDigestItems.length ? (
+        <Card>
+          <CardHeader><CardTitle>Historial en videos</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {item.videoDigestItems.map((entry) => (
+              <ButtonLink key={entry.id} href={`/admin/videos/${entry.videoDigest.id}`} variant="outline" size="sm">
+                <Film className="h-4 w-4" />
+                {entry.videoDigest.title || `Video ${entry.videoDigest.id.slice(-8)}`} - {statusLabel(entry.videoDigest.status)}
+              </ButtonLink>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -136,12 +166,12 @@ export default async function AdminNewsDetailPage({ params, searchParams }: { pa
   );
 }
 
-function StatusButton({ id, status, label }: { id: string; status: string; label: string }) {
+function StatusButton({ id, status, label, disabled = false }: { id: string; status: string; label: string; disabled?: boolean }) {
   return (
     <form action={setNewsStatusAction}>
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value={status} />
-      <Button variant="secondary" type="submit">
+      <Button variant="secondary" type="submit" disabled={disabled}>
         {label}
       </Button>
     </form>

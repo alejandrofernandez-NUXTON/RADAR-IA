@@ -7,6 +7,7 @@ import { LogService } from "@/lib/services/log-service";
 import { SettingsService } from "@/lib/services/settings-service";
 import { SourceService } from "@/lib/services/source-service";
 import { TelegramService } from "@/lib/services/telegram-service";
+import { shouldAutoSendIndividual } from "@/lib/services/telegram-delivery-policy";
 import type { JobProgressReporter, JobResult, SourceContent } from "@/lib/types";
 
 const recommendedActionMap = {
@@ -362,6 +363,9 @@ export class NewsAnalysisService {
   async reprocessNewsItem(newsItemId: string) {
     const item = await prisma.newsItem.findUnique({ where: { id: newsItemId }, include: { source: true } });
     if (!item?.source) throw new Error("La noticia no tiene fuente asociada para reprocesar.");
+    if (item.videoDigestReservationId) {
+      throw new Error(`La noticia esta reservada por el video ${item.videoDigestReservationId}. Cancela el video antes de reprocesar.`);
+    }
     const contents = await this.sourceService.fetchContentsForSource(item.source.id, 5);
     const content = contents.find((entry) => entry.sourceUrl === item.sourceUrl) || contents[0];
     if (!content) throw new Error("No se pudo recuperar contenido de la fuente.");
@@ -385,11 +389,14 @@ export class NewsAnalysisService {
       const settings = await SettingsService.getAll();
       const { parsed, raw } = await this.geminiService.analyzeNews(content, options.signal);
       const status = isAnalysisUnavailable(raw) ? NewsStatus.ERROR : newsStatusFor(parsed.recommendedAction, parsed.overallScore, settings.publishThreshold);
-      const shouldSendTelegram =
-        settings.telegramEnabled &&
-        status === NewsStatus.PUBLISHED &&
-        parsed.telegramWorthy &&
-        parsed.overallScore >= settings.telegramThreshold;
+      const shouldSendTelegram = shouldAutoSendIndividual({
+        telegramEnabled: settings.telegramEnabled,
+        deliveryMode: settings.telegramDeliveryMode,
+        status,
+        telegramWorthy: parsed.telegramWorthy,
+        overallScore: parsed.overallScore,
+        telegramThreshold: settings.telegramThreshold
+      });
 
       const newsItem = await prisma.newsItem.create({
         data: {

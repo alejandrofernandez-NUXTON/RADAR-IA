@@ -22,7 +22,24 @@ const defaults = {
   "jobs.telegramWeekday": "monday",
   "jobs.schedulesEnabled": "true",
   "telegram.enabled": "false",
+  "telegram.deliveryMode": process.env.TELEGRAM_DELIVERY_MODE || "legacy_individual",
   "telegram.messageTemplate": DEFAULT_TELEGRAM_TEMPLATE,
+  "video.enabled": process.env.VIDEO_ENABLED || "false",
+  "video.maxNewsItems": process.env.VIDEO_MAX_NEWS_ITEMS || "6",
+  "video.maxOpenDigests": process.env.VIDEO_MAX_OPEN_DIGESTS || "1",
+  "video.targetDurationSeconds": process.env.VIDEO_TARGET_DURATION_SECONDS || "150",
+  "video.width": process.env.VIDEO_WIDTH || "1920",
+  "video.height": process.env.VIDEO_HEIGHT || "1080",
+  "video.fps": process.env.VIDEO_FPS || "30",
+  "video.language": process.env.VIDEO_LANGUAGE || "es-ES",
+  "video.ttsProvider": process.env.VIDEO_TTS_PROVIDER || "gemini",
+  "video.ttsModel": process.env.VIDEO_TTS_MODEL || "gemini-3.1-flash-tts-preview",
+  "video.ttsVoice": process.env.VIDEO_TTS_VOICE || "Kore",
+  "video.subtitlesEnabled": "true",
+  "video.outputDirectory": process.env.VIDEO_OUTPUT_DIRECTORY || "./data/video-digests",
+  "video.keepTempFiles": "false",
+  "video.retentionDays": "7",
+  "video.failedRetentionDays": "2",
   "openai.enabled": "false",
   "openai.model": process.env.OPENAI_MODEL || ""
 } as const;
@@ -48,13 +65,36 @@ export type AppSettings = {
   jobSchedules: JobSchedules;
   jobSchedulesEnabled: boolean;
   telegramEnabled: boolean;
+  telegramDeliveryMode: TelegramDeliveryMode;
   telegramBotToken: string | null;
   telegramChatId: string | null;
   telegramTemplate: string;
+  video: VideoSettings;
   xBearerToken: string | null;
   openaiApiKey: string | null;
   openaiModel: string;
   openaiEnabled: boolean;
+};
+
+export type TelegramDeliveryMode = "legacy_individual" | "video_digest_manual";
+
+export type VideoSettings = {
+  enabled: boolean;
+  maxNewsItems: number;
+  maxOpenDigests: number;
+  targetDurationSeconds: number;
+  width: number;
+  height: number;
+  fps: number;
+  language: string;
+  ttsProvider: "gemini" | "mock";
+  ttsModel: string;
+  ttsVoice: string;
+  subtitlesEnabled: boolean;
+  outputDirectory: string;
+  keepTempFiles: boolean;
+  retentionDays: number;
+  failedRetentionDays: number;
 };
 
 export type ScheduleFrequency = "hourly" | "daily" | "weekly";
@@ -130,13 +170,36 @@ export class SettingsService {
       jobSchedules: await this.getJobSchedules(),
       jobSchedulesEnabled: await this.getBoolean("jobs.schedulesEnabled", true),
       telegramEnabled: await this.getBoolean("telegram.enabled", false),
+      telegramDeliveryMode: (await this.getString("telegram.deliveryMode", "legacy_individual")) as TelegramDeliveryMode,
       telegramBotToken: await this.getRaw("telegram.botToken"),
       telegramChatId: await this.getRaw("telegram.chatId"),
       telegramTemplate: await this.getString("telegram.messageTemplate", DEFAULT_TELEGRAM_TEMPLATE),
+      video: await this.getVideoSettings(),
       xBearerToken: await this.getRaw("x.bearerToken"),
       openaiApiKey: await this.getRaw("openai.apiKey"),
       openaiModel: await this.getString("openai.model", ""),
       openaiEnabled: await this.getBoolean("openai.enabled", false)
+    };
+  }
+
+  static async getVideoSettings(): Promise<VideoSettings> {
+    return {
+      enabled: await this.getBoolean("video.enabled", false),
+      maxNewsItems: await this.getNumber("video.maxNewsItems", 6),
+      maxOpenDigests: await this.getNumber("video.maxOpenDigests", 1),
+      targetDurationSeconds: await this.getNumber("video.targetDurationSeconds", 150),
+      width: await this.getNumber("video.width", 1920),
+      height: await this.getNumber("video.height", 1080),
+      fps: await this.getNumber("video.fps", 30),
+      language: await this.getString("video.language", "es-ES"),
+      ttsProvider: (await this.getString("video.ttsProvider", "gemini")) as VideoSettings["ttsProvider"],
+      ttsModel: await this.getString("video.ttsModel", "gemini-3.1-flash-tts-preview"),
+      ttsVoice: await this.getString("video.ttsVoice", "Kore"),
+      subtitlesEnabled: await this.getBoolean("video.subtitlesEnabled", true),
+      outputDirectory: await this.getString("video.outputDirectory", "./data/video-digests"),
+      keepTempFiles: await this.getBoolean("video.keepTempFiles", false),
+      retentionDays: await this.getNumber("video.retentionDays", 7),
+      failedRetentionDays: await this.getNumber("video.failedRetentionDays", 2)
     };
   }
 

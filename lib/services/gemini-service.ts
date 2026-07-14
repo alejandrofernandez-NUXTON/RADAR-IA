@@ -127,6 +127,10 @@ function hasUsefulTranscript(content: SourceContent) {
 }
 
 export class GeminiService {
+  async generateStructuredJson<T>(prompt: string, schema: z.ZodType<T>, signal?: AbortSignal) {
+    return this.requestJson(prompt, schema, signal);
+  }
+
   async testConnection(modelOverride?: string) {
     const settings = await SettingsService.getAll();
     if (!settings.geminiApiKey) {

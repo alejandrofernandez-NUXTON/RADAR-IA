@@ -8,57 +8,73 @@ datasource db {
 }
 
 enum SourceType {
-  YOUTUBE_VIDEO      @map("youtube_video")
-  YOUTUBE_CHANNEL    @map("youtube_channel")
-  YOUTUBE_PLAYLIST   @map("youtube_playlist")
-  TWITTER_CHANNEL    @map("twitter_channel")
-  TIKTOK_CHANNEL     @map("tiktok_channel")
-  INSTAGRAM_CHANNEL  @map("instagram_channel")
-  RSS_FEED           @map("rss_feed")
-  WEBSITE            @map("website")
-  NEWSLETTER_MANUAL  @map("newsletter_manual")
+  YOUTUBE_VIDEO     @map("youtube_video")
+  YOUTUBE_CHANNEL   @map("youtube_channel")
+  YOUTUBE_PLAYLIST  @map("youtube_playlist")
+  TWITTER_CHANNEL   @map("twitter_channel")
+  TIKTOK_CHANNEL    @map("tiktok_channel")
+  INSTAGRAM_CHANNEL @map("instagram_channel")
+  RSS_FEED          @map("rss_feed")
+  WEBSITE           @map("website")
+  NEWSLETTER_MANUAL @map("newsletter_manual")
 }
 
 enum CollectedItemStatus {
-  PENDING    @map("pending")
-  PROCESSED  @map("processed")
-  DISCARDED  @map("discarded")
-  ERROR      @map("error")
+  PENDING   @map("pending")
+  PROCESSED @map("processed")
+  DISCARDED @map("discarded")
+  ERROR     @map("error")
 }
 
 enum NewsStatus {
-  DRAFT             @map("draft")
-  REVIEW            @map("review")
-  PUBLISHED         @map("published")
-  DISCARDED         @map("discarded")
-  SENT_TO_TELEGRAM  @map("sent_to_telegram")
-  ERROR             @map("error")
+  DRAFT            @map("draft")
+  REVIEW           @map("review")
+  PUBLISHED        @map("published")
+  DISCARDED        @map("discarded")
+  SENT_TO_TELEGRAM @map("sent_to_telegram")
+  ERROR            @map("error")
 }
 
 enum TrainingStatus {
-  REVIEW     @map("review")
-  PUBLISHED  @map("published")
-  DISCARDED  @map("discarded")
-  FEATURED    @map("featured")
+  REVIEW    @map("review")
+  PUBLISHED @map("published")
+  DISCARDED @map("discarded")
+  FEATURED  @map("featured")
 }
 
 enum TelegramStatus {
-  PENDING  @map("pending")
-  SENT     @map("sent")
-  FAILED   @map("failed")
+  PENDING @map("pending")
+  SENT    @map("sent")
+  FAILED  @map("failed")
+}
+
+enum TelegramMessageKind {
+  NEWS_TEXT    @map("news_text")
+  VIDEO_DIGEST @map("video_digest")
+}
+
+enum VideoDigestStatus {
+  QUEUED            @map("queued")
+  GENERATING        @map("generating")
+  READY             @map("ready")
+  SENDING           @map("sending")
+  SENT              @map("sent")
+  GENERATION_FAILED @map("generation_failed")
+  SEND_FAILED       @map("send_failed")
+  CANCELLED         @map("cancelled")
 }
 
 enum JobStatus {
-  RUNNING  @map("running")
-  SUCCESS  @map("success")
-  FAILED   @map("failed")
-  PARTIAL  @map("partial")
+  RUNNING @map("running")
+  SUCCESS @map("success")
+  FAILED  @map("failed")
+  PARTIAL @map("partial")
 }
 
 enum RecommendedAction {
-  PUBLISH  @map("publish")
-  REVIEW   @map("review")
-  DISCARD  @map("discard")
+  PUBLISH @map("publish")
+  REVIEW  @map("review")
+  DISCARD @map("discard")
 }
 
 model User {
@@ -79,18 +95,18 @@ model Setting {
 }
 
 model Source {
-  id              String      @id @default(cuid())
+  id              String                @id @default(cuid())
   name            String
   type            SourceType
-  url             String      @unique
+  url             String                @unique
   category        String
-  language        String      @default("es")
-  priority        Int         @default(1)
-  active          Boolean     @default(true)
+  language        String                @default("es")
+  priority        Int                   @default(1)
+  active          Boolean               @default(true)
   lastProcessedAt DateTime?
   notes           String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
   newsItems       NewsItem[]
   collectedItems  CollectedSourceItem[]
 
@@ -99,23 +115,23 @@ model Source {
 }
 
 model CollectedSourceItem {
-  id            String              @id @default(cuid())
-  sourceId      String?
-  source        Source?             @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  sourceUrl     String
-  contentHash   String              @unique
-  externalId    String?
-  title         String
-  author        String?
-  description   String?
-  transcript    String?
-  publishedAt   DateTime?
-  rawMetadata   Json?
-  status        CollectedItemStatus @default(PENDING)
-  processedAt   DateTime?
-  errorMessage  String?
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  id           String              @id @default(cuid())
+  sourceId     String?
+  source       Source?             @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceUrl    String
+  contentHash  String              @unique
+  externalId   String?
+  title        String
+  author       String?
+  description  String?
+  transcript   String?
+  publishedAt  DateTime?
+  rawMetadata  Json?
+  status       CollectedItemStatus @default(PENDING)
+  processedAt  DateTime?
+  errorMessage String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
   @@unique([sourceId, sourceUrl])
   @@index([status, createdAt])
@@ -123,86 +139,149 @@ model CollectedSourceItem {
 }
 
 model NewsItem {
-  id                    String            @id @default(cuid())
-  sourceId              String?
-  source                Source?           @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  sourceUrl             String
-  contentHash           String?           @unique
-  externalId            String?
-  title                 String
-  shortSummary          String
-  longSummary           String
-  keyPoints             Json              @default("[]")
-  whyItMatters          String
-  businessApplications  Json              @default("[]")
-  toolsMentioned        Json              @default("[]")
-  companiesMentioned    Json              @default("[]")
-  categories            Json              @default("[]")
-  tags                  Json              @default("[]")
-  noveltyScore          Int               @default(0)
-  relevanceScore        Int               @default(0)
-  practicalityScore     Int               @default(0)
-  urgencyScore          Int               @default(0)
-  overallScore          Int               @default(0)
-  recommendedAction     RecommendedAction @default(REVIEW)
-  telegramWorthy        Boolean           @default(false)
-  featured              Boolean           @default(false)
-  status                NewsStatus        @default(REVIEW)
-  publishedAt           DateTime?
-  sentToTelegramAt      DateTime?
-  rawGeminiResponse     Json?
-  rawSourceMetadata     Json?
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
-  telegramMessages      TelegramMessage[]
+  id                       String            @id @default(cuid())
+  sourceId                 String?
+  source                   Source?           @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  sourceUrl                String
+  contentHash              String?           @unique
+  externalId               String?
+  title                    String
+  shortSummary             String
+  longSummary              String
+  keyPoints                Json              @default("[]")
+  whyItMatters             String
+  businessApplications     Json              @default("[]")
+  toolsMentioned           Json              @default("[]")
+  companiesMentioned       Json              @default("[]")
+  categories               Json              @default("[]")
+  tags                     Json              @default("[]")
+  noveltyScore             Int               @default(0)
+  relevanceScore           Int               @default(0)
+  practicalityScore        Int               @default(0)
+  urgencyScore             Int               @default(0)
+  overallScore             Int               @default(0)
+  recommendedAction        RecommendedAction @default(REVIEW)
+  telegramWorthy           Boolean           @default(false)
+  featured                 Boolean           @default(false)
+  status                   NewsStatus        @default(REVIEW)
+  publishedAt              DateTime?
+  sentToTelegramAt         DateTime?
+  rawGeminiResponse        Json?
+  rawSourceMetadata        Json?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  telegramMessages         TelegramMessage[]
+  videoDigestReservationId String?
+  videoDigestReservation   VideoDigest?      @relation("ActiveVideoDigestReservations", fields: [videoDigestReservationId], references: [id], onDelete: SetNull)
+  videoDigestItems         VideoDigestItem[]
 
   @@unique([sourceId, sourceUrl])
   @@index([status, overallScore])
   @@index([createdAt])
+  @@index([videoDigestReservationId])
 }
 
 model TrainingItem {
-  id                  String         @id @default(cuid())
-  title               String
-  description         String
-  url                 String         @unique
-  provider            String
-  contentType         String
-  estimatedDuration   String
-  level               String
-  topics              Json           @default("[]")
-  qualityScore        Int            @default(0)
-  practicalityScore   Int            @default(0)
-  freshnessScore      Int            @default(0)
-  overallScore        Int            @default(0)
-  whyRecommended      String
-  isFree              Boolean        @default(true)
-  language            String         @default("es")
-  status              TrainingStatus @default(REVIEW)
-  internalNote        String?
-  rawEvaluation       Json?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
+  id                String         @id @default(cuid())
+  title             String
+  description       String
+  url               String         @unique
+  provider          String
+  contentType       String
+  estimatedDuration String
+  level             String
+  topics            Json           @default("[]")
+  qualityScore      Int            @default(0)
+  practicalityScore Int            @default(0)
+  freshnessScore    Int            @default(0)
+  overallScore      Int            @default(0)
+  whyRecommended    String
+  isFree            Boolean        @default(true)
+  language          String         @default("es")
+  status            TrainingStatus @default(REVIEW)
+  internalNote      String?
+  rawEvaluation     Json?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
   @@index([status, overallScore])
   @@index([provider])
 }
 
 model TelegramMessage {
-  id               String         @id @default(cuid())
+  id                String              @id @default(cuid())
+  kind              TelegramMessageKind @default(NEWS_TEXT)
   newsItemId        String?
-  newsItem          NewsItem?      @relation(fields: [newsItemId], references: [id], onDelete: SetNull)
+  newsItem          NewsItem?           @relation(fields: [newsItemId], references: [id], onDelete: SetNull)
+  videoDigestId     String?
+  videoDigest       VideoDigest?        @relation(fields: [videoDigestId], references: [id], onDelete: SetNull)
   chatId            String
   messageText       String
+  telegramMessageId String?
   telegramResponse  Json?
-  status            TelegramStatus @default(PENDING)
+  status            TelegramStatus      @default(PENDING)
+  deliveryUncertain Boolean             @default(false)
   sentAt            DateTime?
   errorMessage      String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   @@index([newsItemId, status])
+  @@index([videoDigestId, status])
+  @@index([kind, status])
   @@index([status])
+}
+
+model VideoDigest {
+  id                    String            @id @default(cuid())
+  status                VideoDigestStatus @default(QUEUED)
+  title                 String?
+  language              String            @default("es-ES")
+  targetDurationSeconds Int               @default(150)
+  inputHash             String
+  script                Json?
+  timeline              Json?
+  renderMetadata        Json?
+  videoStorageKey       String?
+  thumbnailStorageKey   String?
+  subtitleStorageKey    String?
+  durationSeconds       Int?
+  width                 Int?
+  height                Int?
+  fps                   Int?
+  sizeBytes             BigInt?
+  generationAttempts    Int               @default(0)
+  sendAttempts          Int               @default(0)
+  deliveryUncertain     Boolean           @default(false)
+  errorCode             String?
+  errorMessage          String?
+  generatedAt           DateTime?
+  sentAt                DateTime?
+  cancelledAt           DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  items                 VideoDigestItem[]
+  reservedNewsItems     NewsItem[]        @relation("ActiveVideoDigestReservations")
+  telegramMessages      TelegramMessage[]
+
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+model VideoDigestItem {
+  id                 String      @id @default(cuid())
+  videoDigestId      String
+  videoDigest        VideoDigest @relation(fields: [videoDigestId], references: [id], onDelete: Cascade)
+  newsItemId         String?
+  newsItem           NewsItem?   @relation(fields: [newsItemId], references: [id], onDelete: SetNull)
+  position           Int
+  contentSnapshot    Json
+  sourceRevisionHash String
+  createdAt          DateTime    @default(now())
+
+  @@unique([videoDigestId, position])
+  @@unique([videoDigestId, newsItemId])
+  @@index([newsItemId])
 }
 
 model JobRun {

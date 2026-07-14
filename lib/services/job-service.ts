@@ -5,6 +5,7 @@ import { JobCancellationService, JobCancelledError } from "@/lib/services/job-ca
 import { JobRuntimeService } from "@/lib/services/job-runtime-service";
 import { NewsAnalysisService } from "@/lib/services/news-analysis-service";
 import { TrainingSearchService } from "@/lib/services/training-search-service";
+import { VideoDigestService } from "@/lib/services/video-digest-service";
 import type { JobProgress, JobProgressReporter, JobResult } from "@/lib/types";
 
 type JobHandler = (progress?: JobProgressReporter) => Promise<JobResult>;
@@ -12,6 +13,7 @@ type JobHandler = (progress?: JobProgressReporter) => Promise<JobResult>;
 export class JobService {
   private newsAnalysisService = new NewsAnalysisService();
   private trainingSearchService = new TrainingSearchService();
+  private videoDigestService = new VideoDigestService();
 
   async runSourceCollectionJob(progress?: JobProgressReporter) {
     return this.runTrackedJob("source_collection", (report) => this.newsAnalysisService.collectLatestFromActiveSources(report), progress);
@@ -66,6 +68,14 @@ export class JobService {
 
   async runTelegramPendingJob(progress?: JobProgressReporter, options: { ignoreAutoDisabled?: boolean } = {}) {
     return this.runTrackedJob("telegram_send_pending", (report) => this.newsAnalysisService.sendPendingToTelegram(report, options), progress);
+  }
+
+  async runVideoGenerationJob(progress?: JobProgressReporter) {
+    return this.runTrackedJob("video_generate_pending", (report) => this.videoDigestService.generateFromPendingNews(report), progress);
+  }
+
+  async runVideoRegenerationJob(videoDigestId: string, progress?: JobProgressReporter) {
+    return this.runTrackedJob("video_regenerate", (report) => this.videoDigestService.regenerateDigest(videoDigestId, report), progress);
   }
 
   private async runTrackedJob(jobType: string, handler: JobHandler, progress?: JobProgressReporter) {

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CheckCircle2, PauseCircle, PlayCircle } from "lucide-react";
 import { JobRunner } from "@/components/admin/job-runner";
 import { ScheduleStatusBox } from "@/components/admin/schedule-status-box";
@@ -37,7 +38,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   const scheduleSaved = params.schedule === "saved";
   const schedulePaused = params.schedule === "paused";
   const scheduleEnabled = params.schedule === "enabled";
-  const [runs, errors, lastCollection, lastProcessing, lastNews, lastTraining, lastTelegram, settings] = await Promise.all([
+  const [runs, errors, lastCollection, lastProcessing, lastNews, lastTraining, lastTelegram, lastVideo, settings] = await Promise.all([
     prisma.jobRun.findMany({ orderBy: { startedAt: "desc" }, take: 30 }),
     prisma.logEntry.findMany({ where: { level: { in: ["warn", "error"] } }, orderBy: { createdAt: "desc" }, take: 10 }),
     prisma.jobRun.findFirst({ where: { jobType: "source_collection" }, orderBy: { startedAt: "desc" } }),
@@ -45,6 +46,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
     prisma.jobRun.findFirst({ where: { jobType: "news_analysis" }, orderBy: { startedAt: "desc" } }),
     prisma.jobRun.findFirst({ where: { jobType: "training_search" }, orderBy: { startedAt: "desc" } }),
     prisma.jobRun.findFirst({ where: { jobType: "telegram_send_pending" }, orderBy: { startedAt: "desc" } }),
+    prisma.jobRun.findFirst({ where: { jobType: "video_generate_pending" }, orderBy: { startedAt: "desc" } }),
     SettingsService.getAll()
   ]);
   const savedSchedules = await SettingsService.getJobScheduleSavedStates();
@@ -106,11 +108,12 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
         ) : null}
       </div>
 
-      <section className="grid gap-3 md:grid-cols-4">
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <LastRun title="Recogida" run={lastCollection} />
         <LastRun title="Procesado" run={lastProcessing || lastNews} />
         <LastRun title="Formaciones" run={lastTraining} />
         <LastRun title="Telegram" run={lastTelegram} />
+        <LastVideoRun run={lastVideo} />
       </section>
 
       <Card>
@@ -142,7 +145,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
               />
               <SchedulePanel
                 title="Enviar a Telegram"
-                description="Envia al grupo las noticias publicadas que superen el umbral y aun no se hayan enviado."
+                description={settings.telegramDeliveryMode === "video_digest_manual" ? "Omitido en modo video: los videos READY solo se envian por orden del administrador." : "Envia al grupo las noticias publicadas que superen el umbral y aun no se hayan enviado."}
                 prefix="telegram"
                 schedule={settings.jobSchedules.telegram}
                 status={scheduleStatus.telegram}
@@ -177,7 +180,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
         </CardContent>
       </Card>
 
-      <JobRunner />
+      <JobRunner deliveryMode={settings.telegramDeliveryMode} videoEnabled={settings.video.enabled} />
 
       <Card>
         <CardHeader>
@@ -335,4 +338,40 @@ function LastRun({ title, run }: { title: string; run: { status: string; started
       </CardContent>
     </Card>
   );
+}
+
+function LastVideoRun({
+  run
+}: {
+  run: {
+    status: string;
+    startedAt: Date;
+    processedCount: number;
+    failedCount: number;
+    metadata: unknown;
+  } | null;
+}) {
+  const metadata = isRecord(run?.metadata) ? run.metadata : null;
+  const digestId = typeof metadata?.digestId === "string" ? metadata.digestId : null;
+  const durationSeconds = typeof metadata?.durationSeconds === "number" ? metadata.durationSeconds : null;
+  const sizeBytes = typeof metadata?.sizeBytes === "number" ? metadata.sizeBytes : null;
+
+  return (
+    <Card>
+      <CardContent className="py-4">
+        <p className="text-xs font-medium uppercase text-muted-foreground">Video</p>
+        <p className="mt-2 text-sm">{run ? formatDate(run.startedAt) : "Sin ejecuciones"}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Badge tone={run?.status === "SUCCESS" ? "high" : run?.status === "FAILED" ? "danger" : "medium"}>{run?.status || "pendiente"}</Badge>
+          {durationSeconds !== null ? <Badge tone="muted">{Math.floor(durationSeconds / 60)}:{String(durationSeconds % 60).padStart(2, "0")}</Badge> : null}
+          {sizeBytes !== null ? <Badge tone="muted">{(sizeBytes / 1024 / 1024).toFixed(1)} MB</Badge> : null}
+        </div>
+        {digestId ? <Link href={`/admin/videos/${digestId}`} className="mt-3 inline-flex text-xs font-medium text-primary hover:underline">Revisar video</Link> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

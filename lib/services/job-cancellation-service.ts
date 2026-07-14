@@ -84,6 +84,14 @@ export class JobCancellationService {
     };
   }
 
+  static cancelByType(jobType: string, reason = "Proceso detenido manualmente.") {
+    const activeJobs = Array.from(state().activeJobs.values()).filter((job) => job.jobType === jobType);
+    for (const job of activeJobs) {
+      if (!job.controller.signal.aborted) job.controller.abort(reason);
+    }
+    return activeJobs.length;
+  }
+
   static listActive() {
     return Array.from(state().activeJobs.values()).map((job) => ({
       id: job.id,

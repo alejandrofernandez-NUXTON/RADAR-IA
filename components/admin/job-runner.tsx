@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, PlayCircle, Search, Send, Square } from "lucide-react";
+import { Brain, Film, PlayCircle, Search, Send, Square } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -39,7 +39,7 @@ type RunnerState = {
   steps: RunnerStep[];
 };
 
-const jobs: JobButton[] = [
+const baseJobs: JobButton[] = [
   {
     id: "source-collection",
     label: "Recoger publicaciones ahora",
@@ -60,13 +60,6 @@ const jobs: JobButton[] = [
     endpoint: JOB_ENDPOINTS.trainingSearch,
     variant: "outline",
     icon: <PlayCircle className="h-4 w-4" aria-hidden />
-  },
-  {
-    id: "telegram",
-    label: "Enviar pendientes a Telegram",
-    endpoint: JOB_ENDPOINTS.telegramPending,
-    variant: "outline",
-    icon: <Send className="h-4 w-4" aria-hidden />
   }
 ];
 
@@ -83,10 +76,39 @@ function appendStep(current: RunnerState, message: string, percent: number) {
   return [...current.steps, { message, percent, time: Date.now() }].slice(-8);
 }
 
-export function JobRunner() {
+export function JobRunner({ deliveryMode, videoEnabled }: { deliveryMode: "legacy_individual" | "video_digest_manual"; videoEnabled: boolean }) {
   const router = useRouter();
   const [state, setState] = useState<RunnerState | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const jobs = useMemo<JobButton[]>(() => {
+    const deliveryJob: JobButton =
+      deliveryMode === "legacy_individual"
+        ? {
+            id: "telegram",
+            label: "Enviar pendientes a Telegram",
+            endpoint: JOB_ENDPOINTS.telegramPending,
+            variant: "outline",
+            icon: <Send className="h-4 w-4" aria-hidden />
+          }
+        : {
+            id: "video",
+            label: "Generar video con noticias pendientes",
+            endpoint: JOB_ENDPOINTS.videoGenerate,
+            variant: "primary",
+            icon: <Film className="h-4 w-4" aria-hidden />
+          };
+    const result = [...baseJobs, deliveryJob];
+    if (deliveryMode === "legacy_individual" && videoEnabled) {
+      result.push({
+        id: "video",
+        label: "Generar video con noticias pendientes",
+        endpoint: JOB_ENDPOINTS.videoGenerate,
+        variant: "outline",
+        icon: <Film className="h-4 w-4" aria-hidden />
+      });
+    }
+    return result;
+  }, [deliveryMode, videoEnabled]);
 
   useEffect(() => {
     if (!state || state.status !== "running") return;

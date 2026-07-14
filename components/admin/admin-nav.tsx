@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, Briefcase, Newspaper, PlayCircle, Settings, SlidersHorizontal, Stethoscope } from "lucide-react";
+import { BookOpen, Briefcase, Film, Newspaper, PlayCircle, Settings, SlidersHorizontal, Stethoscope } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 
@@ -8,6 +8,7 @@ const navItems = [
   { href: "/admin/settings", label: "Ajustes", icon: Settings },
   { href: "/admin/sources", label: "Fuentes", icon: SlidersHorizontal },
   { href: "/admin/news", label: "Noticias", icon: Newspaper },
+  { href: "/admin/videos", label: "Videos", icon: Film },
   { href: "/admin/training", label: "Formaciones", icon: BookOpen },
   { href: "/admin/jobs", label: "Jobs", icon: PlayCircle },
   { href: "/admin/diagnostics", label: "Diagnostico", icon: Stethoscope }

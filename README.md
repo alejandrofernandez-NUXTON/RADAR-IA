@@ -2,6 +2,8 @@
 
 Aplicacion interna para recopilar, analizar y priorizar novedades de inteligencia artificial, enviar noticias relevantes a Telegram y curar formaciones gratuitas para equipos de empresa.
 
+Incluye un modo opcional para agrupar noticias pendientes en videos explicativos narrados, revisarlos y enviarlos manualmente a Telegram. La documentacion completa esta en [docs/video-digests.md](docs/video-digests.md).
+
 ## Stack
 
 - Next.js App Router
@@ -70,6 +72,9 @@ npm run ops:gemini:diagnose
 npm run ops:telegram:discover
 npm run ops:telegram:save-first
 npm run ops:telegram:test
+npm run test
+npm run video:demo
+npm run video:preview
 ```
 
 ## Gemini
@@ -141,6 +146,12 @@ Opcion permanente: Vercel + Neon/Supabase PostgreSQL + variables de entorno + do
 - `POST /api/jobs/news/run`
 - `POST /api/jobs/training/run`
 - `POST /api/jobs/telegram/send-pending`
+- `POST /api/jobs/video/generate-pending`
+- `POST /api/jobs/video/[id]/regenerate`
+- `POST /api/admin/video-digests/[id]/send`
+- `POST /api/admin/video-digests/[id]/cancel`
+- `POST /api/admin/video-digests/[id]/confirm-not-delivered`
+- `GET /api/admin/video-digests/[id]/media`
 - `POST /api/telegram/test`
 - `GET /api/cron/news`
 - `GET /api/cron/training`
@@ -162,6 +173,8 @@ Los endpoints de jobs aceptan sesion admin o `Authorization: Bearer $CRON_SECRET
 - `/admin/news/[id]`
 - `/admin/training`
 - `/admin/jobs`
+- `/admin/videos`
+- `/admin/videos/[id]`
 
 ## Limitaciones del MVP
 
@@ -170,3 +183,5 @@ Los endpoints de jobs aceptan sesion admin o `Authorization: Bearer $CRON_SECRET
 - La busqueda de formaciones usa proveedores publicos y catalogos reputados; se puede ampliar con APIs dedicadas.
 - El proveedor OpenAI queda configurado como futuro fallback, pero no se invoca todavia.
 - El rate limiting es en memoria, suficiente para MVP local o despliegues simples.
+- El render de video requiere un proceso Node.js persistente, Chromium/FFmpeg compatibles y almacenamiento persistente; no se ha validado dentro de funciones serverless.
+- La retencion de videos finales es configurable, pero su purga programada queda pendiente de un job de mantenimiento.

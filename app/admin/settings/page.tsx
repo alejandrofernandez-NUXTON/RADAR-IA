@@ -5,7 +5,7 @@ import { DEFAULT_NEWS_ANALYSIS_PROMPT, DEFAULT_TELEGRAM_TEMPLATE } from "@/lib/p
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Field, Input, Textarea } from "@/components/ui/form";
+import { Field, Input, Select, Textarea } from "@/components/ui/form";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +88,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
             <CardTitle>Telegram</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
+            <Field label="Modo de entrega">
+              <Select name="telegramDeliveryMode" defaultValue={settings.telegramDeliveryMode}>
+                <option value="legacy_individual">Noticias individuales</option>
+                <option value="video_digest_manual">Video agrupado con envio manual</option>
+              </Select>
+            </Field>
             <label className="flex items-center gap-2 text-sm font-medium">
               <input name="telegramEnabled" type="checkbox" defaultChecked={settings.telegramEnabled} className="h-4 w-4 rounded border-border" />
               Activar envio automatico a Telegram
@@ -106,6 +112,81 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
             <div className="rounded-md border border-border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
               <p className="font-medium text-foreground">Como configurar Telegram</p>
               <p>1. Crea un bot hablando con @BotFather. 2. Copia el token. 3. Anade el bot al grupo. 4. Dale permiso para enviar mensajes. 5. Obten el chat_id del grupo. 6. Guarda token y chat_id aqui. 7. Usa el boton de prueba.</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Videos explicativos</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input name="videoEnabled" type="checkbox" defaultChecked={settings.video.enabled} className="h-4 w-4 rounded border-border" />
+                Activar generacion de videos
+              </label>
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input name="videoSubtitlesEnabled" type="checkbox" defaultChecked={settings.video.subtitlesEnabled} className="h-4 w-4 rounded border-border" />
+                Incluir subtitulos
+              </label>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <Field label="Noticias por video">
+                <Input name="videoMaxNewsItems" type="number" min="1" max="12" defaultValue={settings.video.maxNewsItems} />
+              </Field>
+              <Field label="Videos abiertos maximos">
+                <Input name="videoMaxOpenDigests" type="number" min="1" max="5" defaultValue={settings.video.maxOpenDigests} />
+              </Field>
+              <Field label="Duracion objetivo (segundos)">
+                <Input name="videoTargetDurationSeconds" type="number" min="30" max="900" defaultValue={settings.video.targetDurationSeconds} />
+              </Field>
+              <Field label="Idioma">
+                <Input name="videoLanguage" defaultValue={settings.video.language} />
+              </Field>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Field label="Ancho">
+                <Input name="videoWidth" type="number" min="640" max="3840" defaultValue={settings.video.width} />
+              </Field>
+              <Field label="Alto">
+                <Input name="videoHeight" type="number" min="360" max="2160" defaultValue={settings.video.height} />
+              </Field>
+              <Field label="FPS">
+                <Input name="videoFps" type="number" min="15" max="60" defaultValue={settings.video.fps} />
+              </Field>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <Field label="Proveedor TTS">
+                <Select name="videoTtsProvider" defaultValue={settings.video.ttsProvider}>
+                  <option value="gemini">Gemini TTS</option>
+                  <option value="mock">Simulado (pruebas)</option>
+                </Select>
+              </Field>
+              <Field label="Modelo TTS">
+                <Input name="videoTtsModel" defaultValue={settings.video.ttsModel} />
+              </Field>
+              <Field label="Voz">
+                <Input name="videoTtsVoice" defaultValue={settings.video.ttsVoice} />
+              </Field>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <Field label="Directorio de salida">
+                <Input name="videoOutputDirectory" defaultValue={settings.video.outputDirectory} />
+              </Field>
+              <Field label="Retencion (dias)">
+                <Input name="videoRetentionDays" type="number" min="1" max="365" defaultValue={settings.video.retentionDays} />
+              </Field>
+              <Field label="Retencion de fallos (dias)">
+                <Input name="videoFailedRetentionDays" type="number" min="1" max="90" defaultValue={settings.video.failedRetentionDays} />
+              </Field>
+            </div>
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input name="videoKeepTempFiles" type="checkbox" defaultChecked={settings.video.keepTempFiles} className="h-4 w-4 rounded border-border" />
+              Conservar archivos temporales para diagnostico
+            </label>
+            <div className="rounded-md border border-border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
+              El render se ejecuta en el servidor Node y guarda los MP4 fuera de public. En produccion necesita almacenamiento persistente, Chromium y recursos suficientes de CPU y memoria.
             </div>
           </CardContent>
         </Card>

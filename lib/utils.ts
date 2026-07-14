@@ -46,7 +46,14 @@ export function statusLabel(status: NewsStatus | TrainingStatus | TelegramStatus
     FEATURED: "Destacado",
     PENDING: "Pendiente",
     SENT: "Enviado",
-    FAILED: "Fallido"
+    FAILED: "Fallido",
+    QUEUED: "En cola",
+    GENERATING: "Generando",
+    READY: "Listo para revision",
+    SENDING: "Enviando",
+    GENERATION_FAILED: "Error de generacion",
+    SEND_FAILED: "Error de envio",
+    CANCELLED: "Cancelado"
   };
 
   return labels[status] ?? status.toLowerCase().replaceAll("_", " ");

@@ -18,15 +18,22 @@
     "ops:gemini:diagnose": "tsx scripts/gemini-diagnose.ts",
     "ops:telegram:discover": "tsx scripts/telegram-discover.ts",
     "ops:telegram:save-first": "tsx scripts/telegram-discover.ts --save-first",
-    "ops:telegram:test": "tsx scripts/telegram-test.ts"
+    "ops:telegram:test": "tsx scripts/telegram-test.ts",
+    "video:demo": "tsx scripts/video-demo.ts",
+    "video:preview": "remotion studio video/remotion/index.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@remotion/bundler": "4.0.488",
+    "@remotion/cli": "4.0.488",
+    "@remotion/renderer": "4.0.488",
     "dotenv": "^16.4.7",
     "lucide-react": "^0.468.0",
     "next": "^15.0.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "remotion": "4.0.488",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -42,7 +49,8 @@
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.16",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.10"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
