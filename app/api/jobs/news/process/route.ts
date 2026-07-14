@@ -4,6 +4,7 @@ import { streamJob } from "@/lib/job-stream";
 import { JobService } from "@/lib/services/job-service";
 
 export const runtime = "nodejs";
+export const maxDuration = 900;
 
 export async function POST(request: NextRequest) {
   if (!(await isAuthorizedInternalRequest(request))) return unauthorized();

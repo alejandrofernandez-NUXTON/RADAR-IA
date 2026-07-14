@@ -508,7 +508,10 @@ export class NewsAnalysisService {
     return { created: true, id: item.id };
   }
 
-  async sendPendingToTelegram(progress?: JobProgressReporter, options: { ignoreAutoDisabled?: boolean } = {}): Promise<JobResult> {
+  async sendPendingToTelegram(
+    progress?: JobProgressReporter,
+    options: { ignoreAutoDisabled?: boolean; scheduled?: boolean } = {}
+  ): Promise<JobResult> {
     const result = await this.telegramService.sendPending(progress, options);
     const failedMessages = await prisma.telegramMessage.count({ where: { status: TelegramStatus.FAILED } });
     return {

@@ -29,6 +29,7 @@ type ScheduleStatusBoxProps = {
   scheduleText: string;
   nextRunAt: string | null;
   savedAt: string | null;
+  inactiveText?: string;
 };
 
 type ScheduledRunState = {
@@ -75,15 +76,17 @@ export function ScheduleStatusBox({
   hasSchedule,
   scheduleText,
   nextRunAt,
-  savedAt
+  savedAt,
+  inactiveText
 }: ScheduleStatusBoxProps) {
   const router = useRouter();
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState<number | null>(null);
   const [jobs, setJobs] = useState<RuntimeJobStatus[]>([]);
   const [scheduledRun, setScheduledRun] = useState<ScheduledRunState | null>(null);
   const triggeredRunKey = useRef<string | null>(null);
 
   useEffect(() => {
+    setNow(Date.now());
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, []);
@@ -112,7 +115,7 @@ export function ScheduleStatusBox({
 
   const runningJob = useMemo(() => jobs.find((job) => job.jobType === jobType && job.status === "running"), [jobType, jobs]);
   const displayJob = scheduledRun?.status === "running" ? scheduledRun : runningJob || scheduledRun;
-  const countdown = automationEnabled && nextRunAt ? formatCountdown(new Date(nextRunAt).getTime() - now) : null;
+  const countdown = automationEnabled && nextRunAt && now !== null ? formatCountdown(new Date(nextRunAt).getTime() - now) : null;
 
   const runScheduledJob = useCallback(async (triggerKey: string) => {
     const startedAt = new Date().toISOString();
@@ -127,7 +130,8 @@ export function ScheduleStatusBox({
     });
 
     try {
-      const jobResult = await runStreamedJob(endpoint, (progress: ProgressPayload) => {
+      const separator = endpoint.includes("?") ? "&" : "?";
+      const jobResult = await runStreamedJob(`${endpoint}${separator}scheduled=1`, (progress: ProgressPayload) => {
         setScheduledRun((current) => ({
           jobRunId: current?.jobRunId || `scheduled-${triggerKey}`,
           jobType,
@@ -183,7 +187,7 @@ export function ScheduleStatusBox({
   }, [endpoint, jobLabel, jobType, router]);
 
   useEffect(() => {
-    if (!automationEnabled || !hasSchedule || !nextRunAt) return;
+    if (!automationEnabled || !hasSchedule || !nextRunAt || now === null) return;
     const targetTime = new Date(nextRunAt).getTime();
     if (!Number.isFinite(targetTime) || now < targetTime) return;
     if (triggeredRunKey.current === nextRunAt) return;
@@ -201,7 +205,7 @@ export function ScheduleStatusBox({
             <p className="font-medium text-foreground">{scheduleText}</p>
             <p className="text-xs text-muted-foreground">
               {!automationEnabled
-                ? "Contadores automaticos pausados."
+                ? inactiveText || "Contadores automaticos pausados."
                 : nextRunAt
                   ? `Proxima ejecucion: ${formatDateTime(nextRunAt)}`
                   : "Proxima ejecucion no calculada."}
@@ -216,7 +220,11 @@ export function ScheduleStatusBox({
       <div className="rounded-md border border-border bg-card px-3 py-2">
         <p className="text-xs font-medium uppercase text-muted-foreground">Cuenta atras</p>
         <p className="mt-1 text-sm font-semibold tabular-nums">
-          {!automationEnabled ? "Pausado" : hasSchedule && countdown ? countdown : "Sin programacion"}
+          {!automationEnabled
+            ? "Pausado"
+            : !hasSchedule
+              ? "Sin programacion"
+              : countdown || "Calculando..."}
         </p>
       </div>
 

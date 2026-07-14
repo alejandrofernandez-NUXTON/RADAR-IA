@@ -6,6 +6,8 @@ import { JobRuntimeService } from "@/lib/services/job-runtime-service";
 import { NewsAnalysisService } from "@/lib/services/news-analysis-service";
 import { TrainingSearchService } from "@/lib/services/training-search-service";
 import { VideoDigestService } from "@/lib/services/video-digest-service";
+import { SettingsService } from "@/lib/services/settings-service";
+import { shouldAutoGenerateVideo } from "@/lib/services/video-automation-policy";
 import type { JobProgress, JobProgressReporter, JobResult } from "@/lib/types";
 
 type JobHandler = (progress?: JobProgressReporter) => Promise<JobResult>;
@@ -20,7 +22,55 @@ export class JobService {
   }
 
   async runNewsProcessingJob(progress?: JobProgressReporter) {
-    return this.runTrackedJob("news_processing", (report) => this.newsAnalysisService.processPendingCollectedItems(report), progress);
+    return this.runTrackedJob(
+      "news_processing",
+      async (report) => {
+        const settings = await SettingsService.getAll();
+        const autoGenerate = shouldAutoGenerateVideo({
+          deliveryMode: settings.telegramDeliveryMode,
+          videoEnabled: settings.video.enabled,
+          autoGenerateAfterProcessing: settings.video.autoGenerateAfterProcessing,
+          autoSendOnSchedule: settings.video.autoSendOnSchedule
+        });
+
+        if (!autoGenerate) {
+          return this.newsAnalysisService.processPendingCollectedItems(report);
+        }
+
+        const analysisProgress: JobProgressReporter = (step) =>
+          report?.({
+            ...step,
+            percent: Math.min(48, Math.max(2, Math.round(2 + step.percent * 0.46))),
+            message: `Gemini: ${step.message}`
+          });
+        analysisProgress.signal = report?.signal;
+        analysisProgress.throwIfCancelled = report?.throwIfCancelled;
+        const processing = await this.newsAnalysisService.processPendingCollectedItems(analysisProgress);
+
+        await report?.({ percent: 50, message: "Analisis terminado. Preparando generacion automatica del video..." });
+        const videoProgress: JobProgressReporter = (step) =>
+          report?.({
+            ...step,
+            percent: Math.min(99, Math.max(52, Math.round(52 + step.percent * 0.47))),
+            message: `Video: ${step.message}`
+          });
+        videoProgress.signal = report?.signal;
+        videoProgress.throwIfCancelled = report?.throwIfCancelled;
+        const video = await this.videoDigestService.generateFromPendingNews(videoProgress);
+
+        return {
+          processedCount: processing.processedCount,
+          successCount: processing.successCount,
+          failedCount: processing.failedCount + video.failedCount,
+          metadata: {
+            processing: processing.metadata,
+            video: video.metadata,
+            videoAutoGeneration: true
+          }
+        };
+      },
+      progress
+    );
   }
 
   async runNewsJob(progress?: JobProgressReporter) {
@@ -66,7 +116,10 @@ export class JobService {
     return this.runTrackedJob("training_search", (report) => this.trainingSearchService.runSearch(undefined, report), progress);
   }
 
-  async runTelegramPendingJob(progress?: JobProgressReporter, options: { ignoreAutoDisabled?: boolean } = {}) {
+  async runTelegramPendingJob(
+    progress?: JobProgressReporter,
+    options: { ignoreAutoDisabled?: boolean; scheduled?: boolean } = {}
+  ) {
     return this.runTrackedJob("telegram_send_pending", (report) => this.newsAnalysisService.sendPendingToTelegram(report, options), progress);
   }
 

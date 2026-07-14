@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-El modo `video_digest_manual` agrupa noticias ya procesadas y publicadas en un MP4 narrado. La generacion y el envio son operaciones independientes: generar nunca llama a Telegram, y el envio solo comienza despues de una confirmacion visible de un administrador autenticado.
+El modo `video_digest_manual` agrupa noticias ya procesadas y publicadas en un MP4 narrado. La generacion y el envio siguen siendo operaciones independientes: generar nunca llama a Telegram. Un video `READY` puede enviarse mediante confirmacion visible del administrador o cuando venza la programacion de Telegram si se ha activado expresamente esa opcion.
 
 No se usan elementos `CollectedSourceItem.PENDING`. Esos registros aun esperan analisis con Gemini. Tampoco se usa `NewsStatus.REVIEW`, que representa revision editorial. Una noticia pendiente de Telegram es un estado derivado centralizado en `TelegramPendingNewsService`.
 
@@ -26,7 +26,7 @@ flowchart LR
     E -->|Exito| G[READY]
     G -->|Regenerar| E
     G -->|Cancelar| H[CANCELLED y liberar]
-    G -->|Orden manual| I[SENDING]
+    G -->|Orden manual o programacion| I[SENDING]
     I -->|Error| J[SEND_FAILED]
     J -->|Reintento manual| I
     I -->|Telegram confirma| K[SENT]
@@ -45,8 +45,8 @@ Las transiciones se validan en `video/state-machine.ts`. Un digest `SENT` o `CAN
 - `SubtitleService`: construye subtitulos SRT desde el timeline.
 - `VideoRenderService`: empaqueta y renderiza la composicion Remotion a H.264/AAC.
 - `VideoStorageService`: rutas relativas controladas, temporales y artefactos finales.
-- `TelegramService.sendVideoDigest`: subida manual e idempotente con `sendVideo`.
-- `JobService`: registra `video_generate_pending` y `video_regenerate` en `JobRun` y publica progreso.
+- `TelegramService.sendVideoDigest`: subida idempotente con `sendVideo`, invocada manualmente o por el job programado.
+- `JobService`: encadena opcionalmente `news_processing` con la generacion y registra los jobs con progreso.
 
 ## Modelo de datos
 
@@ -78,6 +78,17 @@ El pipeline realiza estas fases:
 
 La generacion se puede detener desde Jobs. El `AbortSignal` se comprueba entre fases y se propaga a llamadas y render cuando es posible. Al cancelar se eliminan parciales, el digest queda `CANCELLED` y las reservas se liberan.
 
+## Automatizacion
+
+Hay dos interruptores independientes:
+
+- `video.autoGenerateAfterProcessing`: al terminar `news_processing`, el mismo job reclama noticias elegibles y genera el video. El progreso pasa de Gemini a guion, TTS, recursos y render. Si no hay noticias o ya existe un digest abierto, termina como no-op.
+- `video.autoSendOnSchedule`: cuando vence el contador de Telegram o se invoca `/api/cron/telegram` en su franja, el job busca videos `READY` y envia el mas antiguo. Nunca envia noticias individuales en modo video.
+
+La programacion automatica solo selecciona `READY`. Un digest `SEND_FAILED` o con `deliveryUncertain` no se reintenta automaticamente y debe revisarse desde el panel. La adquisicion atomica de `SENDING` sigue evitando envios duplicados si coinciden el boton, el contador y el cron.
+
+El contador del navegador y el cron usan el mismo endpoint con una marca de ejecucion programada. En hosting, el cron es el mecanismo que mantiene el flujo aunque nadie tenga `/admin/jobs` abierto.
+
 ## Revision y envio manual
 
 1. Abre `/admin/jobs` y pulsa `Generar video con noticias pendientes`.
@@ -103,6 +114,8 @@ La base de datos tiene prioridad y `.env` actua como fallback:
 ```env
 TELEGRAM_DELIVERY_MODE="legacy_individual"
 VIDEO_ENABLED="false"
+VIDEO_AUTO_GENERATE_AFTER_PROCESSING="false"
+VIDEO_AUTO_SEND_ON_SCHEDULE="false"
 VIDEO_MAX_NEWS_ITEMS="6"
 VIDEO_MAX_OPEN_DIGESTS="1"
 VIDEO_TARGET_DURATION_SECONDS="150"
@@ -118,12 +131,17 @@ VIDEO_OUTPUT_DIRECTORY="./data/video-digests"
 
 El panel `/admin/settings` tambien configura subtitulos, temporales y retencion. Los limites Zod evitan lotes, resoluciones, FPS, duraciones y rutas inseguras.
 
-Para activar el flujo manual:
+Para activar el flujo automatico:
 
 1. Configura Gemini y Telegram como en el flujo existente.
 2. En `/admin/settings`, activa `Videos explicativos`.
-3. Selecciona `Video agrupado con envio manual` como modo de Telegram.
-4. Guarda los ajustes.
+3. Selecciona `Video agrupado: envio manual o programado` como modo de Telegram.
+4. Activa `Generar al terminar Gemini`.
+5. Activa `Enviar al vencer el contador de Telegram` si deseas entrega programada.
+6. Activa los envios automaticos de Telegram y guarda.
+7. En `/admin/jobs`, guarda las horas de recogida, procesamiento y Telegram.
+
+Los dos interruptores tambien aparecen dentro de las tarjetas de programacion de Jobs. Desactivarlos conserva el procesamiento de Gemini y el envio manual sin eliminar horarios.
 
 Para volver al sistema anterior, selecciona `Noticias individuales (modo anterior)`. Es el valor predeterminado y mantiene la compatibilidad de instalaciones existentes.
 

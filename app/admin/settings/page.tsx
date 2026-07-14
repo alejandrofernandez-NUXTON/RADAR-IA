@@ -91,7 +91,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
             <Field label="Modo de entrega">
               <Select name="telegramDeliveryMode" defaultValue={settings.telegramDeliveryMode}>
                 <option value="legacy_individual">Noticias individuales</option>
-                <option value="video_digest_manual">Video agrupado con envio manual</option>
+                <option value="video_digest_manual">Video agrupado: envio manual o programado</option>
               </Select>
             </Field>
             <label className="flex items-center gap-2 text-sm font-medium">
@@ -121,10 +121,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
             <CardTitle>Videos explicativos</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <label className="flex items-center gap-2 text-sm font-medium">
                 <input name="videoEnabled" type="checkbox" defaultChecked={settings.video.enabled} className="h-4 w-4 rounded border-border" />
                 Activar generacion de videos
+              </label>
+              <label className="flex items-start gap-2 text-sm font-medium">
+                <input name="videoAutoGenerateAfterProcessing" type="checkbox" defaultChecked={settings.video.autoGenerateAfterProcessing} className="mt-0.5 h-4 w-4 rounded border-border" />
+                Generar al terminar Gemini
+              </label>
+              <label className="flex items-start gap-2 text-sm font-medium">
+                <input name="videoAutoSendOnSchedule" type="checkbox" defaultChecked={settings.video.autoSendOnSchedule} className="mt-0.5 h-4 w-4 rounded border-border" />
+                Enviar al vencer el contador de Telegram
               </label>
               <label className="flex items-center gap-2 text-sm font-medium">
                 <input name="videoSubtitlesEnabled" type="checkbox" defaultChecked={settings.video.subtitlesEnabled} className="h-4 w-4 rounded border-border" />

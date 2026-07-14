@@ -25,6 +25,8 @@ const defaults = {
   "telegram.deliveryMode": process.env.TELEGRAM_DELIVERY_MODE || "legacy_individual",
   "telegram.messageTemplate": DEFAULT_TELEGRAM_TEMPLATE,
   "video.enabled": process.env.VIDEO_ENABLED || "false",
+  "video.autoGenerateAfterProcessing": process.env.VIDEO_AUTO_GENERATE_AFTER_PROCESSING || "false",
+  "video.autoSendOnSchedule": process.env.VIDEO_AUTO_SEND_ON_SCHEDULE || "false",
   "video.maxNewsItems": process.env.VIDEO_MAX_NEWS_ITEMS || "6",
   "video.maxOpenDigests": process.env.VIDEO_MAX_OPEN_DIGESTS || "1",
   "video.targetDurationSeconds": process.env.VIDEO_TARGET_DURATION_SECONDS || "150",
@@ -80,6 +82,8 @@ export type TelegramDeliveryMode = "legacy_individual" | "video_digest_manual";
 
 export type VideoSettings = {
   enabled: boolean;
+  autoGenerateAfterProcessing: boolean;
+  autoSendOnSchedule: boolean;
   maxNewsItems: number;
   maxOpenDigests: number;
   targetDurationSeconds: number;
@@ -185,6 +189,8 @@ export class SettingsService {
   static async getVideoSettings(): Promise<VideoSettings> {
     return {
       enabled: await this.getBoolean("video.enabled", false),
+      autoGenerateAfterProcessing: await this.getBoolean("video.autoGenerateAfterProcessing", false),
+      autoSendOnSchedule: await this.getBoolean("video.autoSendOnSchedule", false),
       maxNewsItems: await this.getNumber("video.maxNewsItems", 6),
       maxOpenDigests: await this.getNumber("video.maxOpenDigests", 1),
       targetDurationSeconds: await this.getNumber("video.targetDurationSeconds", 150),

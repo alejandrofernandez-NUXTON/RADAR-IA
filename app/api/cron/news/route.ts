@@ -4,6 +4,7 @@ import { JobService } from "@/lib/services/job-service";
 import { ScheduleService } from "@/lib/services/schedule-service";
 
 export const runtime = "nodejs";
+export const maxDuration = 900;
 
 export async function GET(request: NextRequest) {
   if (!(await isAuthorizedInternalRequest(request))) return unauthorized();

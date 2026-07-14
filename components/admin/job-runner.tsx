@@ -76,28 +76,48 @@ function appendStep(current: RunnerState, message: string, percent: number) {
   return [...current.steps, { message, percent, time: Date.now() }].slice(-8);
 }
 
-export function JobRunner({ deliveryMode, videoEnabled }: { deliveryMode: "legacy_individual" | "video_digest_manual"; videoEnabled: boolean }) {
+export function JobRunner({
+  deliveryMode,
+  videoEnabled,
+  autoGenerateAfterProcessing
+}: {
+  deliveryMode: "legacy_individual" | "video_digest_manual";
+  videoEnabled: boolean;
+  autoGenerateAfterProcessing: boolean;
+}) {
   const router = useRouter();
   const [state, setState] = useState<RunnerState | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const jobs = useMemo<JobButton[]>(() => {
-    const deliveryJob: JobButton =
-      deliveryMode === "legacy_individual"
-        ? {
-            id: "telegram",
-            label: "Enviar pendientes a Telegram",
-            endpoint: JOB_ENDPOINTS.telegramPending,
-            variant: "outline",
-            icon: <Send className="h-4 w-4" aria-hidden />
-          }
-        : {
-            id: "video",
-            label: "Generar video con noticias pendientes",
-            endpoint: JOB_ENDPOINTS.videoGenerate,
-            variant: "primary",
-            icon: <Film className="h-4 w-4" aria-hidden />
-          };
-    const result = [...baseJobs, deliveryJob];
+    const result = baseJobs.map((job) =>
+      job.id === "news-processing" && deliveryMode === "video_digest_manual" && autoGenerateAfterProcessing
+        ? { ...job, label: "Analizar con Gemini y generar video", variant: "primary" as const }
+        : job
+    );
+    if (deliveryMode === "legacy_individual") {
+      result.push({
+        id: "telegram",
+        label: "Enviar pendientes a Telegram",
+        endpoint: JOB_ENDPOINTS.telegramPending,
+        variant: "outline",
+        icon: <Send className="h-4 w-4" aria-hidden />
+      });
+    } else {
+      result.push({
+        id: "video",
+        label: "Generar video con noticias pendientes",
+        endpoint: JOB_ENDPOINTS.videoGenerate,
+        variant: "outline",
+        icon: <Film className="h-4 w-4" aria-hidden />
+      });
+      result.push({
+        id: "telegram-video",
+        label: "Enviar video READY a Telegram ahora",
+        endpoint: JOB_ENDPOINTS.telegramPending,
+        variant: "outline",
+        icon: <Send className="h-4 w-4" aria-hidden />
+      });
+    }
     if (deliveryMode === "legacy_individual" && videoEnabled) {
       result.push({
         id: "video",
@@ -108,7 +128,7 @@ export function JobRunner({ deliveryMode, videoEnabled }: { deliveryMode: "legac
       });
     }
     return result;
-  }, [deliveryMode, videoEnabled]);
+  }, [autoGenerateAfterProcessing, deliveryMode, videoEnabled]);
 
   useEffect(() => {
     if (!state || state.status !== "running") return;

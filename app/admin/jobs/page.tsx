@@ -11,7 +11,7 @@ import { JOB_ENDPOINTS } from "@/lib/job-endpoints";
 import { prisma } from "@/lib/prisma";
 import { SettingsService, type JobScheduleConfig } from "@/lib/services/settings-service";
 import { ScheduleService } from "@/lib/services/schedule-service";
-import { formatDate } from "@/lib/utils";
+import { formatDate, statusLabel } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   const scheduleSaved = params.schedule === "saved";
   const schedulePaused = params.schedule === "paused";
   const scheduleEnabled = params.schedule === "enabled";
-  const [runs, errors, lastCollection, lastProcessing, lastNews, lastTraining, lastTelegram, lastVideo, settings] = await Promise.all([
+  const [runs, errors, lastCollection, lastProcessing, lastNews, lastTraining, lastTelegram, latestVideo, settings] = await Promise.all([
     prisma.jobRun.findMany({ orderBy: { startedAt: "desc" }, take: 30 }),
     prisma.logEntry.findMany({ where: { level: { in: ["warn", "error"] } }, orderBy: { createdAt: "desc" }, take: 10 }),
     prisma.jobRun.findFirst({ where: { jobType: "source_collection" }, orderBy: { startedAt: "desc" } }),
@@ -46,11 +46,16 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
     prisma.jobRun.findFirst({ where: { jobType: "news_analysis" }, orderBy: { startedAt: "desc" } }),
     prisma.jobRun.findFirst({ where: { jobType: "training_search" }, orderBy: { startedAt: "desc" } }),
     prisma.jobRun.findFirst({ where: { jobType: "telegram_send_pending" }, orderBy: { startedAt: "desc" } }),
-    prisma.jobRun.findFirst({ where: { jobType: "video_generate_pending" }, orderBy: { startedAt: "desc" } }),
+    prisma.videoDigest.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, status: true, createdAt: true, durationSeconds: true, sizeBytes: true }
+    }),
     SettingsService.getAll()
   ]);
   const savedSchedules = await SettingsService.getJobScheduleSavedStates();
   const now = new Date();
+  const videoDeliveryMode = settings.telegramDeliveryMode === "video_digest_manual";
+  const telegramScheduleEnabled = settings.jobSchedulesEnabled && (!videoDeliveryMode || settings.video.autoSendOnSchedule);
   const scheduleStatus = {
     collect: {
       jobType: "source_collection",
@@ -74,7 +79,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
       jobType: "telegram_send_pending",
       saved: savedSchedules.telegram.saved,
       savedAt: savedSchedules.telegram.savedAt?.toISOString() || null,
-      nextRunAt: settings.jobSchedulesEnabled && savedSchedules.telegram.saved
+      nextRunAt: telegramScheduleEnabled && savedSchedules.telegram.saved
         ? ScheduleService.nextRun(settings.jobSchedules.telegram, lastTelegram?.startedAt || null, now, settings.timezone)?.toISOString() || null
         : null,
       text: scheduleSummary(settings.jobSchedules.telegram)
@@ -113,7 +118,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
         <LastRun title="Procesado" run={lastProcessing || lastNews} />
         <LastRun title="Formaciones" run={lastTraining} />
         <LastRun title="Telegram" run={lastTelegram} />
-        <LastVideoRun run={lastVideo} />
+        <LastVideoDigest digest={latestVideo} />
       </section>
 
       <Card>
@@ -121,6 +126,13 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
           <CardTitle>Programacion automatica</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {videoDeliveryMode ? (
+            <div className="grid gap-3 border-b border-border pb-4 text-sm md:grid-cols-3">
+              <PipelineStep number="1" title="Recoger" detail="Ultimas publicaciones de las fuentes" active />
+              <PipelineStep number="2" title="Gemini y video" detail={settings.video.autoGenerateAfterProcessing ? "Generacion automatica activa" : "Solo procesamiento automatico"} active={settings.video.autoGenerateAfterProcessing} />
+              <PipelineStep number="3" title="Telegram" detail={settings.video.autoSendOnSchedule ? "Envio al vencer el contador" : "Envio exclusivamente manual"} active={settings.video.autoSendOnSchedule} />
+            </div>
+          ) : null}
           <form action={saveJobSchedulesAction} className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-3">
               <SchedulePanel
@@ -135,23 +147,34 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
               />
               <SchedulePanel
                 title="Procesar con Gemini"
-                description="Analiza las publicaciones recogidas, calcula relevancia y decide si se publican."
+                description={videoDeliveryMode && settings.video.autoGenerateAfterProcessing ? "Analiza las publicaciones nuevas y, al terminar, genera automaticamente un video con las noticias elegibles." : "Analiza las publicaciones recogidas, calcula relevancia y decide si se publican."}
                 prefix="process"
                 schedule={settings.jobSchedules.process}
                 status={scheduleStatus.process}
                 endpoint={JOB_ENDPOINTS.newsProcessing}
-                jobLabel="Procesar pendientes con Gemini"
+                jobLabel={videoDeliveryMode && settings.video.autoGenerateAfterProcessing ? "Analizar con Gemini y generar video" : "Procesar pendientes con Gemini"}
                 automationEnabled={settings.jobSchedulesEnabled}
+                automationControl={videoDeliveryMode ? {
+                  name: "videoAutoGenerateAfterProcessing",
+                  label: "Generar video automaticamente al terminar Gemini",
+                  checked: settings.video.autoGenerateAfterProcessing
+                } : undefined}
               />
               <SchedulePanel
                 title="Enviar a Telegram"
-                description={settings.telegramDeliveryMode === "video_digest_manual" ? "Omitido en modo video: los videos READY solo se envian por orden del administrador." : "Envia al grupo las noticias publicadas que superen el umbral y aun no se hayan enviado."}
+                description={videoDeliveryMode ? "Envia el video READY mas antiguo cuando el contador llegue a cero. Los fallos e intentos inciertos requieren revision manual." : "Envia al grupo las noticias publicadas que superen el umbral y aun no se hayan enviado."}
                 prefix="telegram"
                 schedule={settings.jobSchedules.telegram}
                 status={scheduleStatus.telegram}
                 endpoint={JOB_ENDPOINTS.telegramPending}
-                jobLabel="Enviar pendientes a Telegram"
-                automationEnabled={settings.jobSchedulesEnabled}
+                jobLabel={videoDeliveryMode ? "Enviar video READY a Telegram" : "Enviar pendientes a Telegram"}
+                automationEnabled={telegramScheduleEnabled}
+                inactiveText={!settings.jobSchedulesEnabled ? "Contadores automaticos pausados." : "Envio programado de videos desactivado."}
+                automationControl={videoDeliveryMode ? {
+                  name: "videoAutoSendOnSchedule",
+                  label: "Enviar video READY al llegar el contador a cero",
+                  checked: settings.video.autoSendOnSchedule
+                } : undefined}
               />
             </div>
             <div className="flex flex-wrap items-center gap-3 pt-2">
@@ -180,7 +203,11 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
         </CardContent>
       </Card>
 
-      <JobRunner deliveryMode={settings.telegramDeliveryMode} videoEnabled={settings.video.enabled} />
+      <JobRunner
+        deliveryMode={settings.telegramDeliveryMode}
+        videoEnabled={settings.video.enabled}
+        autoGenerateAfterProcessing={settings.video.autoGenerateAfterProcessing}
+      />
 
       <Card>
         <CardHeader>
@@ -253,7 +280,9 @@ function SchedulePanel({
   status,
   endpoint,
   jobLabel,
-  automationEnabled
+  automationEnabled,
+  inactiveText,
+  automationControl
 }: {
   title: string;
   description: string;
@@ -262,6 +291,8 @@ function SchedulePanel({
   endpoint: string;
   jobLabel: string;
   automationEnabled: boolean;
+  inactiveText?: string;
+  automationControl?: { name: string; label: string; checked: boolean };
   status: {
     jobType: string;
     saved: boolean;
@@ -299,12 +330,19 @@ function SchedulePanel({
           </Select>
         </Field>
       </div>
+      {automationControl ? (
+        <label className="mt-4 flex items-start gap-2 border-t border-border pt-4 text-xs font-medium leading-5">
+          <input name={automationControl.name} type="checkbox" defaultChecked={automationControl.checked} className="mt-0.5 h-4 w-4 rounded border-border" />
+          {automationControl.label}
+        </label>
+      ) : null}
       <div className="mt-4">
         <ScheduleStatusBox
           jobType={status.jobType}
           endpoint={endpoint}
           jobLabel={jobLabel}
           automationEnabled={automationEnabled}
+          inactiveText={inactiveText}
           hasSchedule={status.saved}
           scheduleText={status.text}
           nextRunAt={status.nextRunAt}
@@ -340,38 +378,41 @@ function LastRun({ title, run }: { title: string; run: { status: string; started
   );
 }
 
-function LastVideoRun({
-  run
+function LastVideoDigest({
+  digest
 }: {
-  run: {
+  digest: {
+    id: string;
     status: string;
-    startedAt: Date;
-    processedCount: number;
-    failedCount: number;
-    metadata: unknown;
+    createdAt: Date;
+    durationSeconds: number | null;
+    sizeBytes: bigint | null;
   } | null;
 }) {
-  const metadata = isRecord(run?.metadata) ? run.metadata : null;
-  const digestId = typeof metadata?.digestId === "string" ? metadata.digestId : null;
-  const durationSeconds = typeof metadata?.durationSeconds === "number" ? metadata.durationSeconds : null;
-  const sizeBytes = typeof metadata?.sizeBytes === "number" ? metadata.sizeBytes : null;
+  const durationSeconds = digest?.durationSeconds ?? null;
+  const sizeBytes = digest?.sizeBytes ? Number(digest.sizeBytes) : null;
 
   return (
     <Card>
       <CardContent className="py-4">
         <p className="text-xs font-medium uppercase text-muted-foreground">Video</p>
-        <p className="mt-2 text-sm">{run ? formatDate(run.startedAt) : "Sin ejecuciones"}</p>
+        <p className="mt-2 text-sm">{digest ? formatDate(digest.createdAt) : "Sin ejecuciones"}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Badge tone={run?.status === "SUCCESS" ? "high" : run?.status === "FAILED" ? "danger" : "medium"}>{run?.status || "pendiente"}</Badge>
+          <Badge tone={digest?.status === "READY" || digest?.status === "SENT" ? "high" : digest?.status?.includes("FAILED") ? "danger" : "medium"}>{digest ? statusLabel(digest.status) : "pendiente"}</Badge>
           {durationSeconds !== null ? <Badge tone="muted">{Math.floor(durationSeconds / 60)}:{String(durationSeconds % 60).padStart(2, "0")}</Badge> : null}
           {sizeBytes !== null ? <Badge tone="muted">{(sizeBytes / 1024 / 1024).toFixed(1)} MB</Badge> : null}
         </div>
-        {digestId ? <Link href={`/admin/videos/${digestId}`} className="mt-3 inline-flex text-xs font-medium text-primary hover:underline">Revisar video</Link> : null}
+        {digest ? <Link href={`/admin/videos/${digest.id}`} className="mt-3 inline-flex text-xs font-medium text-primary hover:underline">Revisar video</Link> : null}
       </CardContent>
     </Card>
   );
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function PipelineStep({ number, title, detail, active }: { number: string; title: string; detail: string; active: boolean }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{number}</span>
+      <div><p className="font-medium">{title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p></div>
+    </div>
+  );
 }

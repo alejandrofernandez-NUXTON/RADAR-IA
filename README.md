@@ -2,7 +2,7 @@
 
 Aplicacion interna para recopilar, analizar y priorizar novedades de inteligencia artificial, enviar noticias relevantes a Telegram y curar formaciones gratuitas para equipos de empresa.
 
-Incluye un modo opcional para agrupar noticias pendientes en videos explicativos narrados, revisarlos y enviarlos manualmente a Telegram. La documentacion completa esta en [docs/video-digests.md](docs/video-digests.md).
+Incluye un modo opcional para agrupar noticias pendientes en videos explicativos narrados. La generacion puede encadenarse automaticamente despues de Gemini y los videos `READY` pueden enviarse manualmente o mediante la programacion de Telegram. La documentacion completa esta en [docs/video-digests.md](docs/video-digests.md).
 
 ## Stack
 

@@ -6,6 +6,7 @@ import { NewsStatus, TelegramMessageKind, VideoDigestStatus } from "@prisma/clie
 const mocks = vi.hoisted(() => ({
   getAll: vi.fn(),
   digestFindUnique: vi.fn(),
+  digestFindMany: vi.fn(),
   digestUpdateMany: vi.fn(),
   txDigestUpdateMany: vi.fn(),
   messageCreate: vi.fn(),
@@ -25,7 +26,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    videoDigest: { findUnique: mocks.digestFindUnique, updateMany: mocks.digestUpdateMany },
+    videoDigest: { findUnique: mocks.digestFindUnique, findMany: mocks.digestFindMany, updateMany: mocks.digestUpdateMany },
     telegramMessage: { create: mocks.messageCreate, findFirst: mocks.messageFindFirst, update: mocks.messageUpdate },
     newsItem: { findUnique: mocks.newsFindUnique, updateMany: mocks.newsUpdateMany, update: mocks.newsUpdate },
     $transaction: mocks.transaction
@@ -56,7 +57,12 @@ const baseSettings = {
   telegramChatId: "-1001",
   telegramDeliveryMode: "video_digest_manual",
   telegramEnabled: true,
-  telegramTemplate: "{title} {sourceUrl} {tags}"
+  telegramTemplate: "{title} {sourceUrl} {tags}",
+  video: {
+    enabled: true,
+    autoSendOnSchedule: false,
+    maxOpenDigests: 1
+  }
 };
 
 function digest(overrides: Record<string, unknown> = {}) {
@@ -87,6 +93,7 @@ describe("manual Telegram video delivery", () => {
     vi.clearAllMocks();
     mocks.getAll.mockResolvedValue(baseSettings);
     mocks.digestFindUnique.mockResolvedValue(digest());
+    mocks.digestFindMany.mockResolvedValue([]);
     mocks.digestUpdateMany.mockResolvedValue({ count: 1 });
     mocks.txDigestUpdateMany.mockResolvedValue({ count: 1 });
     mocks.messageCreate.mockResolvedValue({ id: "message-1" });
@@ -192,10 +199,35 @@ describe("manual Telegram video delivery", () => {
     expect(mocks.messageCreate).not.toHaveBeenCalled();
   });
 
-  it("skips mass individual delivery in video_digest_manual mode", async () => {
+  it("does not fall back to individual news when no READY video exists", async () => {
     const result = await new TelegramService().sendPending();
-    expect(result.metadata).toEqual({ skipped: true, reason: "video_digest_manual" });
+    expect(result.metadata).toEqual({ skipped: true, reason: "no_ready_videos" });
     expect(mocks.listEligible).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps scheduled video delivery disabled until the toggle is enabled", async () => {
+    const result = await new TelegramService().sendPending(undefined, { scheduled: true });
+    expect(result.metadata).toEqual({ skipped: true, reason: "video_schedule_disabled" });
+    expect(mocks.digestFindMany).not.toHaveBeenCalled();
+  });
+
+  it("sends a READY video from the explicit mass-delivery button", async () => {
+    mocks.digestFindMany.mockResolvedValue([{ id: "digest-1", title: "Radar IA" }]);
+    const result = await new TelegramService().sendPending(undefined, { ignoreAutoDisabled: true });
+    expect(result.successCount).toBe(1);
+    expect(result.metadata).toEqual({ delivery: "manual_video", sentDigestIds: ["digest-1"] });
+    expect(mocks.messageCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a READY video when the scheduled toggle is enabled", async () => {
+    mocks.getAll.mockResolvedValue({
+      ...baseSettings,
+      video: { ...baseSettings.video, autoSendOnSchedule: true }
+    });
+    mocks.digestFindMany.mockResolvedValue([{ id: "digest-1", title: "Radar IA" }]);
+    const result = await new TelegramService().sendPending(undefined, { scheduled: true });
+    expect(result.successCount).toBe(1);
+    expect(result.metadata).toEqual({ delivery: "scheduled_video", sentDigestIds: ["digest-1"] });
   });
 });

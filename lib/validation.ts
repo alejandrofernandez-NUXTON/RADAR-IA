@@ -80,6 +80,8 @@ export const settingsInputSchema = z.object({
   telegramChatId: z.string().optional(),
   telegramTemplate: z.string().min(20),
   videoEnabled: z.coerce.boolean().default(false),
+  videoAutoGenerateAfterProcessing: z.coerce.boolean().default(false),
+  videoAutoSendOnSchedule: z.coerce.boolean().default(false),
   videoMaxNewsItems: z.coerce.number().int().min(1).max(12),
   videoMaxOpenDigests: z.coerce.number().int().min(1).max(5),
   videoTargetDurationSeconds: z.coerce.number().int().min(30).max(900),

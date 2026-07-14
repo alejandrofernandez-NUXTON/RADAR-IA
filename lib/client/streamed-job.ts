@@ -27,7 +27,9 @@ export function clampPercent(value: number) {
 }
 
 export async function runStreamedJob(endpoint: string, onProgress: (progress: ProgressPayload) => void) {
-  const response = await fetch(`${endpoint}?stream=1`, { method: "POST" });
+  const url = new URL(endpoint, window.location.origin);
+  url.searchParams.set("stream", "1");
+  const response = await fetch(`${url.pathname}${url.search}`, { method: "POST" });
   if (!response.ok) throw new Error(`El servidor devolvio ${response.status}.`);
   if (!response.body) throw new Error("El servidor no devolvio flujo de progreso.");
 

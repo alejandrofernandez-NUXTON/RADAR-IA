@@ -47,6 +47,8 @@ export async function saveSettingsAction(formData: FormData) {
     telegramChatId: formString(formData, "telegramChatId"),
     telegramTemplate: formString(formData, "telegramTemplate"),
     videoEnabled: formData.get("videoEnabled") === "on",
+    videoAutoGenerateAfterProcessing: formData.get("videoAutoGenerateAfterProcessing") === "on",
+    videoAutoSendOnSchedule: formData.get("videoAutoSendOnSchedule") === "on",
     videoMaxNewsItems: formData.get("videoMaxNewsItems"),
     videoMaxOpenDigests: formData.get("videoMaxOpenDigests"),
     videoTargetDurationSeconds: formData.get("videoTargetDurationSeconds"),
@@ -79,6 +81,8 @@ export async function saveSettingsAction(formData: FormData) {
   await SettingsService.set("telegram.deliveryMode", input.telegramDeliveryMode);
   await SettingsService.set("telegram.messageTemplate", input.telegramTemplate);
   await SettingsService.set("video.enabled", String(input.videoEnabled));
+  await SettingsService.set("video.autoGenerateAfterProcessing", String(input.videoAutoGenerateAfterProcessing));
+  await SettingsService.set("video.autoSendOnSchedule", String(input.videoAutoSendOnSchedule));
   await SettingsService.set("video.maxNewsItems", String(input.videoMaxNewsItems));
   await SettingsService.set("video.maxOpenDigests", String(input.videoMaxOpenDigests));
   await SettingsService.set("video.targetDurationSeconds", String(input.videoTargetDurationSeconds));
@@ -130,6 +134,8 @@ export async function saveJobSchedulesAction(formData: FormData) {
   await SettingsService.set("jobs.telegramFrequency", input.telegramFrequency);
   await SettingsService.set("jobs.telegramTime", input.telegramTime);
   await SettingsService.set("jobs.telegramWeekday", input.telegramWeekday);
+  await SettingsService.set("video.autoGenerateAfterProcessing", String(formData.get("videoAutoGenerateAfterProcessing") === "on"));
+  await SettingsService.set("video.autoSendOnSchedule", String(formData.get("videoAutoSendOnSchedule") === "on"));
 
   revalidatePath("/admin/jobs");
   redirect("/admin/jobs?schedule=saved");

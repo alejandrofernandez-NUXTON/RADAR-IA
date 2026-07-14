@@ -9,6 +9,7 @@ import { LocalVideoStorageProvider } from "@/video/services/video-storage-servic
 import { VideoDigestError } from "@/video/errors";
 import { asStringArray } from "@/lib/utils";
 import type { JobProgressReporter } from "@/lib/types";
+import { shouldAutoSendReadyVideo } from "@/lib/services/video-automation-policy";
 
 function formatTags(tags: string[]) {
   return tags
@@ -205,22 +206,13 @@ export class TelegramService {
     }
   }
 
-  async sendPending(progress?: JobProgressReporter, options: { ignoreAutoDisabled?: boolean } = {}) {
+  async sendPending(
+    progress?: JobProgressReporter,
+    options: { ignoreAutoDisabled?: boolean; scheduled?: boolean } = {}
+  ) {
     const settings = await SettingsService.getAll();
     if (settings.telegramDeliveryMode === "video_digest_manual") {
-      await progress?.({
-        percent: 100,
-        message: "Envio individual omitido: el modo activo agrupa las noticias en videos con envio manual.",
-        processedCount: 0,
-        successCount: 0,
-        failedCount: 0
-      });
-      return {
-        processedCount: 0,
-        successCount: 0,
-        failedCount: 0,
-        metadata: { skipped: true, reason: "video_digest_manual" }
-      };
+      return this.sendReadyVideoDigests(progress, options);
     }
     if (!settings.telegramEnabled && !options.ignoreAutoDisabled) {
       await progress?.({ percent: 100, message: "El envio automatico a Telegram esta desactivado.", processedCount: 0, successCount: 0, failedCount: 0 });
@@ -296,7 +288,87 @@ export class TelegramService {
     return { processedCount: pending.length, successCount, failedCount };
   }
 
-  async sendVideoDigest(videoDigestId: string) {
+  private async sendReadyVideoDigests(
+    progress?: JobProgressReporter,
+    options: { ignoreAutoDisabled?: boolean; scheduled?: boolean } = {}
+  ) {
+    const settings = await SettingsService.getAll();
+    const scheduled = options.scheduled === true;
+
+    if (!settings.video.enabled) {
+      await progress?.({ percent: 100, message: "La generacion de videos esta desactivada.", processedCount: 0, successCount: 0, failedCount: 0 });
+      return { processedCount: 0, successCount: 0, failedCount: 0, metadata: { skipped: true, reason: "video_disabled" } };
+    }
+    if (scheduled && !shouldAutoSendReadyVideo({
+      deliveryMode: settings.telegramDeliveryMode,
+      videoEnabled: settings.video.enabled,
+      autoGenerateAfterProcessing: settings.video.autoGenerateAfterProcessing,
+      autoSendOnSchedule: settings.video.autoSendOnSchedule
+    })) {
+      await progress?.({ percent: 100, message: "El envio programado de videos esta desactivado.", processedCount: 0, successCount: 0, failedCount: 0 });
+      return { processedCount: 0, successCount: 0, failedCount: 0, metadata: { skipped: true, reason: "video_schedule_disabled" } };
+    }
+    if (!settings.telegramEnabled && !options.ignoreAutoDisabled) {
+      await progress?.({ percent: 100, message: "El envio automatico a Telegram esta desactivado.", processedCount: 0, successCount: 0, failedCount: 0 });
+      return { processedCount: 0, successCount: 0, failedCount: 0, metadata: { skipped: true, reason: "telegram_disabled" } };
+    }
+
+    const ready = await prisma.videoDigest.findMany({
+      where: { status: VideoDigestStatus.READY, deliveryUncertain: false },
+      select: { id: true, title: true },
+      orderBy: { createdAt: "asc" },
+      take: Math.max(1, Math.min(5, settings.video.maxOpenDigests))
+    });
+    if (!ready.length) {
+      await progress?.({ percent: 100, message: "No hay videos READY pendientes de envio.", processedCount: 0, successCount: 0, failedCount: 0 });
+      return { processedCount: 0, successCount: 0, failedCount: 0, metadata: { skipped: true, reason: "no_ready_videos" } };
+    }
+
+    await progress?.({ percent: 5, message: `Preparando ${ready.length} video(s) READY para Telegram...`, totalCount: ready.length });
+    let successCount = 0;
+    let failedCount = 0;
+    const sentDigestIds: string[] = [];
+    for (const [index, digest] of ready.entries()) {
+      progress?.throwIfCancelled?.();
+      await progress?.({
+        percent: 10 + Math.round((index / ready.length) * 85),
+        message: `Enviando video ${index + 1}/${ready.length}: ${digest.title || digest.id}`,
+        processedCount: index,
+        totalCount: ready.length,
+        successCount,
+        failedCount
+      });
+      try {
+        const result = await this.sendVideoDigest(digest.id, progress?.signal);
+        if (!result.skipped) {
+          successCount += 1;
+          sentDigestIds.push(digest.id);
+        }
+      } catch {
+        if (progress?.signal?.aborted) {
+          throw new Error(typeof progress.signal.reason === "string" ? progress.signal.reason : "Proceso detenido manualmente.");
+        }
+        failedCount += 1;
+      }
+    }
+
+    await progress?.({
+      percent: 98,
+      message: failedCount ? "Envio de videos terminado con incidencias." : "Videos confirmados por Telegram.",
+      processedCount: ready.length,
+      totalCount: ready.length,
+      successCount,
+      failedCount
+    });
+    return {
+      processedCount: ready.length,
+      successCount,
+      failedCount,
+      metadata: { delivery: scheduled ? "scheduled_video" : "manual_video", sentDigestIds }
+    };
+  }
+
+  async sendVideoDigest(videoDigestId: string, signal?: AbortSignal) {
     const settings = await SettingsService.getAll();
     if (!settings.telegramBotToken || !settings.telegramChatId) {
       throw new VideoDigestError("TELEGRAM_VIDEO_UPLOAD_ERROR", "Configura el bot token y el chat ID de Telegram.");
@@ -378,10 +450,11 @@ export class TelegramService {
       form.set("video", new Blob([bytes], { type: "video/mp4" }), "nuxton-radar-ia.mp4");
 
       uploadStarted = true;
+      const timeoutSignal = AbortSignal.timeout(10 * 60_000);
       const response = await fetch(`https://api.telegram.org/bot${settings.telegramBotToken}/sendVideo`, {
         method: "POST",
         body: form,
-        signal: AbortSignal.timeout(10 * 60_000)
+        signal: signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal
       });
       const payload = (await response.json()) as Record<string, unknown>;
       if (!response.ok || payload.ok === false) {
