@@ -1,23 +1,29 @@
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import { BrandMark } from "./BrandMark";
+import { NetworkGraphic } from "./NetworkGraphic";
+import { videoFonts, videoTheme } from "../theme";
 
 export function VideoCover({ title, subtitle, date }: { title: string; subtitle?: string; date: string }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const scale = spring({ fps, frame, config: { damping: 18, stiffness: 90 }, durationInFrames: 26 });
   const opacity = interpolate(frame, [0, 16], [0, 1], { extrapolateRight: "clamp" });
+  const titleSize = title.length > 92 ? 72 : title.length > 62 ? 82 : 94;
   return (
-    <div style={{ width: "100%", height: "100%", backgroundColor: "#f4f7f5", color: "#172025", padding: "120px 150px", position: "relative", overflow: "hidden" }}>
-      <div style={{ position: "absolute", width: 310, height: 310, right: 105, top: 95, backgroundColor: "#172025", transform: "rotate(8deg)" }} />
-      <div style={{ position: "absolute", width: 190, height: 190, right: 355, top: 335, backgroundColor: "#16a167" }} />
-      <div style={{ position: "absolute", width: 125, height: 125, right: 165, top: 475, backgroundColor: "#e56b4a" }} />
-      <div style={{ opacity, transform: `scale(${scale})`, transformOrigin: "left center", maxWidth: 1190 }}>
-        <div style={{ color: "#16a167", fontSize: 30, fontWeight: 720, textTransform: "uppercase" }}>Nuxton Knowledge Platform</div>
-        <div style={{ marginTop: 36, fontSize: 86, lineHeight: 1.04, fontWeight: 760, maxWidth: 1150 }}>{title}</div>
-        {subtitle ? <div style={{ marginTop: 30, color: "#536168", fontSize: 38, lineHeight: 1.3, maxWidth: 980 }}>{subtitle}</div> : null}
-        <div style={{ marginTop: 58, fontSize: 27, color: "#6b777d" }}>{date}</div>
+    <div style={{ width: "100%", height: "100%", backgroundColor: videoTheme.background, color: videoTheme.white, padding: "74px 82px", position: "relative", overflow: "hidden", fontFamily: videoFonts.sans }}>
+      <BrandMark />
+      <div style={{ position: "absolute", right: -95, top: 86, opacity: 0.92 }}>
+        <NetworkGraphic size={780} />
       </div>
-      <div style={{ position: "absolute", right: 105, bottom: 55, color: "#6b777d", fontSize: 20 }}>
-        Guion y voz generados con IA
+      <div style={{ position: "absolute", left: 82, top: 410, width: 1050, opacity, transform: `scale(${scale})`, transformOrigin: "left center" }}>
+        <div style={{ color: videoTheme.cyan, fontSize: 24, fontWeight: 700, textTransform: "uppercase" }}>Radar IA diario</div>
+        <div style={{ marginTop: 24, fontFamily: videoFonts.display, fontSize: titleSize, lineHeight: 1.03, fontWeight: 400, maxWidth: 1040 }}>{title}</div>
+        <div style={{ marginTop: 28, width: 118, height: 4, backgroundColor: videoTheme.blue }} />
+        {subtitle ? <div style={{ marginTop: 24, color: videoTheme.muted, fontSize: 31, lineHeight: 1.34, maxWidth: 940 }}>{subtitle}</div> : null}
+        <div style={{ marginTop: 30, fontSize: 22, color: videoTheme.muted }}>{date}</div>
+      </div>
+      <div style={{ position: "absolute", right: 82, bottom: 42, color: videoTheme.muted, fontSize: 18 }}>
+        Nuxton Knowledge Platform
       </div>
     </div>
   );

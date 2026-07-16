@@ -36,24 +36,45 @@ function assertHttpUrl(value: string | null, label: string) {
   }
 }
 
+export function briefingWordBudget(targetDurationSeconds: number) {
+  const durationSeconds = Math.max(120, Math.min(180, Math.round(targetDurationSeconds)));
+  return {
+    durationSeconds,
+    minWords: Math.round(durationSeconds * 1.75),
+    maxWords: Math.round(durationSeconds * 2.05)
+  };
+}
+
 export class VideoScriptService {
   constructor(private readonly openaiService = new OpenAIService()) {}
 
   async generate(snapshots: NewsSnapshot[], targetDurationSeconds: number, language: string, signal?: AbortSignal) {
-    const prompt = `Crea un guion audiovisual estructurado para un video explicativo interno de Nuxton Knowledge Platform.
+    const budget = briefingWordBudget(targetDurationSeconds);
+    const sceneWords = Math.max(55, Math.floor((budget.minWords - 80) / Math.max(1, snapshots.length)));
+    const prompt = `Crea el briefing audiovisual diario de IA para el equipo de Nuxton Knowledge Platform.
+
+Objetivo editorial:
+- En ${budget.durationSeconds} segundos, el equipo debe entender que ha cambiado, por que afecta a Nuxton y que accion merece la pena.
+- No hagas un resumen cronologico del contenido original. Convierte la evidencia en decisiones.
+- Si una novedad no cambia ninguna decision, dilo de forma breve y no la infles.
 
 Reglas obligatorias:
 - Devuelve exclusivamente JSON valido con version "1.0".
 - Usa solo los snapshots proporcionados. No busques ni inventes informacion externa.
 - Debe existir exactamente una escena por cada noticia y conservar su newsItemId.
-- Mantiene nombres, fechas y cifras. Si un dato no aparece, no lo completes.
-- Espanol natural de Espana, tono profesional y orientado a decisiones empresariales.
-- La narracion explica; el texto visible resume.
-- Maximo tres puntos visuales por escena y ningun parrafo largo en pantalla.
+- Mantiene nombres, fechas, cifras y limites. Si un dato no aparece, no lo completes.
+- Espanol natural de Espana, frases cortas y tono de briefing ejecutivo.
+- Sin saludos, definiciones basicas, historia del creador, sponsors, autopromocion, hype ni repeticiones.
+- Empieza por el dato mas importante. No uses frases como "en este video", "vamos a ver" o "es interesante".
+- El guion completo debe tener entre ${budget.minWords} y ${budget.maxWords} palabras.
+- Introduccion: 20-35 palabras. Anticipa las decisiones, sin enumerar titulares.
+- Cada escena: alrededor de ${sceneWords} palabras y una sola idea principal. Explica evidencia, impacto y siguiente paso.
+- Cada escena debe tener exactamente tres onScreenBullets, breves y con estos prefijos: "Que cambio:", "Impacto Nuxton:" y "Accion:".
+- Conclusion: 40-60 palabras. Prioriza, no recapitules.
+- La conclusion debe tener exactamente tres onScreenBullets con estos prefijos: "Hacer hoy:", "Vigilar:" y "No priorizar:".
+- La narracion aporta contexto util; el texto visible permite entender la decision sin audio.
 - No leas URLs en voz alta.
-- Sin sensacionalismo, promociones ni relleno.
-- La introduccion debe anticipar el valor del lote y la conclusion debe proponer prioridades concretas.
-- Ajusta el conjunto a unos ${targetDurationSeconds} segundos.
+- Ajusta el conjunto a unos ${budget.durationSeconds} segundos y nunca rellenes para alcanzar duracion.
 - title maximo 140 caracteres; onScreenBullets maximo 3.
 - sources debe incluir una entrada por noticia.
 
@@ -65,7 +86,7 @@ Forma JSON exacta:
   "title": "string",
   "subtitle": "string o null",
   "language": "${language}",
-  "estimatedDurationSeconds": 150,
+  "estimatedDurationSeconds": ${budget.durationSeconds},
   "introduction": {"narration":"string","onScreenTitle":"string","onScreenText":"string o null"},
   "scenes": [{"id":"scene-1","newsItemId":"id exacto","order":1,"title":"string","narration":"string","onScreenBullets":["string"],"sourceLabel":"string","sourceUrl":"https://... o null","preferredImageUrl":"https://... o null","estimatedDurationSeconds":25}],
   "conclusion": {"narration":"string","onScreenTitle":"string","onScreenBullets":["string"]},
@@ -93,14 +114,14 @@ ${JSON.stringify(snapshots, null, 2)}`;
 export function createDemoScript(): VideoScript {
   return videoScriptSchema.parse({
     version: "1.0",
-    title: "Radar IA: decisiones que importan esta semana",
-    subtitle: "Resumen ejecutivo de Nuxton Knowledge Platform",
+    title: "Agentes mas seguros y modelos mas eficientes",
+    subtitle: "Lo que cambia, el impacto para Nuxton y las decisiones del dia",
     language: "es-ES",
-    estimatedDurationSeconds: 28,
+    estimatedDurationSeconds: 150,
     introduction: {
-      narration: "Estas son las novedades de inteligencia artificial que merece la pena revisar y convertir en acciones concretas.",
-      onScreenTitle: "Radar IA de Nuxton",
-      onScreenText: "Tres senales para priorizar esta semana"
+      narration: "Hoy hay dos senales utiles: los agentes ganan control operativo y los modelos compactos reducen coste. Estas son las decisiones que merece la pena tomar.",
+      onScreenTitle: "Radar IA diario",
+      onScreenText: "Dos senales. Dos decisiones. Sin ruido."
     },
     scenes: [
       {
@@ -109,7 +130,7 @@ export function createDemoScript(): VideoScript {
         order: 1,
         title: "Los agentes ganan control operativo",
         narration: "Las nuevas herramientas de agentes incorporan mejores controles, trazabilidad y aprobaciones humanas. Para la empresa, el paso util es probar un flujo acotado y medir tiempo, calidad y excepciones.",
-        onScreenBullets: ["Mas control y trazabilidad", "Piloto en un proceso acotado", "Medir excepciones y calidad"],
+        onScreenBullets: ["Que cambio: mas control y trazabilidad", "Impacto Nuxton: menor riesgo operativo", "Accion: probar un flujo acotado"],
         sourceLabel: "Fuente de demostracion",
         sourceUrl: "https://example.com/demo-agents",
         preferredImageUrl: null,
@@ -121,7 +142,7 @@ export function createDemoScript(): VideoScript {
         order: 2,
         title: "Modelos mas pequenos, despliegues mas simples",
         narration: "Los modelos compactos siguen mejorando en tareas empresariales concretas. Esto abre una via para reducir coste y latencia sin usar siempre el modelo mas grande.",
-        onScreenBullets: ["Menor coste por tarea", "Menos latencia", "Evaluacion por caso de uso"],
+        onScreenBullets: ["Que cambio: mejor rendimiento compacto", "Impacto Nuxton: menor coste y latencia", "Accion: comparar por tarea"],
         sourceLabel: "Fuente de demostracion",
         sourceUrl: "https://example.com/demo-models",
         preferredImageUrl: null,
@@ -130,8 +151,8 @@ export function createDemoScript(): VideoScript {
     ],
     conclusion: {
       narration: "La recomendacion es priorizar un piloto de agentes y comparar un modelo compacto en una tarea repetitiva antes de ampliar el alcance.",
-      onScreenTitle: "Siguiente paso",
-      onScreenBullets: ["Elegir un flujo", "Definir metricas", "Revisar resultados en dos semanas"]
+      onScreenTitle: "Que hacemos hoy",
+      onScreenBullets: ["Hacer hoy: elegir un flujo piloto", "Vigilar: coste y excepciones", "No priorizar: demos sin metricas"]
     },
     sources: [
       { newsItemId: "demo-news-1", name: "Demo", title: "Agentes con control", url: "https://example.com/demo-agents" },

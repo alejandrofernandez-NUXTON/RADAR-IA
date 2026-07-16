@@ -1,7 +1,7 @@
 import { rm, stat } from "fs/promises";
 import path from "path";
 import { bundle } from "@remotion/bundler";
-import { getVideoMetadata, makeCancelSignal, renderMedia, renderStill, selectComposition } from "@remotion/renderer";
+import { getVideoMetadata, makeCancelSignal, renderMedia, RenderInternals, selectComposition } from "@remotion/renderer";
 import type { JobProgressReporter } from "@/lib/types";
 import { VideoDigestError } from "@/video/errors";
 import { videoRenderPropsSchema, type VideoRenderProps } from "@/video/types/video-types";
@@ -71,17 +71,26 @@ export class VideoRenderService {
       });
       progress?.throwIfCancelled?.();
 
-      await renderStill({
-        composition,
-        serveUrl,
-        inputProps: props,
-        output: workspace.thumbnailPath,
-        imageFormat: "jpeg",
-        jpegQuality: 86,
-        frame: Math.min(composition.durationInFrames - 1, Math.max(0, Math.round(props.fps * 1.5))),
-        overwrite: true,
-        cancelSignal,
-        logLevel: "warn"
+      await RenderInternals.callFf({
+        bin: "ffmpeg",
+        args: [
+          "-y",
+          "-ss",
+          "3",
+          "-i",
+          workspace.videoPath,
+          "-frames:v",
+          "1",
+          "-update",
+          "1",
+          "-q:v",
+          "2",
+          workspace.thumbnailPath
+        ],
+        indent: false,
+        logLevel: "warn",
+        binariesDirectory: null,
+        cancelSignal
       });
     } catch (error) {
       if (progress?.signal?.aborted) throw new Error("Proceso detenido manualmente.", { cause: error });

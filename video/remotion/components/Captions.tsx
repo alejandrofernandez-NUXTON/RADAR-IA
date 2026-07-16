@@ -1,8 +1,10 @@
+import { videoFonts, videoTheme } from "../theme";
+
 export function Captions({ text }: { text?: string }) {
   if (!text) return null;
   return (
-    <div style={{ position: "absolute", left: 210, right: 210, bottom: 52, display: "flex", justifyContent: "center" }}>
-      <div style={{ maxWidth: 1320, backgroundColor: "rgba(18, 24, 27, 0.92)", color: "#ffffff", padding: "14px 24px", fontSize: 29, lineHeight: 1.3, textAlign: "center" }}>
+    <div style={{ position: "absolute", left: 210, right: 210, top: 930, display: "flex", justifyContent: "center", fontFamily: videoFonts.sans }}>
+      <div style={{ maxWidth: 1320, backgroundColor: "rgba(2, 11, 20, 0.94)", color: videoTheme.white, borderTop: `3px solid ${videoTheme.blue}`, padding: "13px 24px", fontSize: 27, lineHeight: 1.28, textAlign: "center", boxShadow: "0 12px 35px rgba(0, 0, 0, 0.32)" }}>
         {text}
       </div>
     </div>

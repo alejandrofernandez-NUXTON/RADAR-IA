@@ -166,8 +166,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
               <Field label="Videos abiertos maximos">
                 <Input name="videoMaxOpenDigests" type="number" min="1" max="5" defaultValue={settings.video.maxOpenDigests} />
               </Field>
-              <Field label="Duracion objetivo (segundos)">
-                <Input name="videoTargetDurationSeconds" type="number" min="30" max="900" defaultValue={settings.video.targetDurationSeconds} />
+              <Field label="Duracion objetivo (2-3 minutos)">
+                <Input name="videoTargetDurationSeconds" type="number" min="120" max="180" step="15" defaultValue={settings.video.targetDurationSeconds} />
               </Field>
               <Field label="Idioma">
                 <Input name="videoLanguage" defaultValue={settings.video.language} />

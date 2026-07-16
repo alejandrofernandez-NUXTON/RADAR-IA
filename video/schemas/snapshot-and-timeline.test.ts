@@ -3,7 +3,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { NewsStatus, RecommendedAction, type NewsItem, type Source, SourceType } from "@prisma/client";
 import { createNewsSnapshot, digestInputHash, newsSnapshotSchema, sourceRevisionHash } from "@/video/schemas/news-snapshot-schema";
 import { videoScriptSchema } from "@/video/schemas/video-script-schema";
-import { createDemoScript } from "@/video/services/video-script-service";
+import { briefingWordBudget, createDemoScript } from "@/video/services/video-script-service";
 import { timelineToSrt } from "@/video/services/subtitle-service";
 import type { NarrationTrack } from "@/video/types/video-types";
 import { buildTimeline } from "@/video/utils/timing";
@@ -103,6 +103,12 @@ describe("video snapshots", () => {
 });
 
 describe("script, timeline and subtitles", () => {
+  it("keeps daily briefings between two and three minutes", () => {
+    expect(briefingWordBudget(60)).toEqual({ durationSeconds: 120, minWords: 210, maxWords: 246 });
+    expect(briefingWordBudget(150)).toEqual({ durationSeconds: 150, minWords: 263, maxWords: 308 });
+    expect(briefingWordBudget(500).durationSeconds).toBe(180);
+  });
+
   it("accepts the deterministic demo script", () => {
     expect(videoScriptSchema.parse(createDemoScript()).scenes).toHaveLength(2);
   });

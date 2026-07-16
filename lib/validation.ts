@@ -82,7 +82,7 @@ export const settingsInputSchema = z.object({
   videoAutoSendOnSchedule: z.coerce.boolean().default(false),
   videoMaxNewsItems: z.coerce.number().int().min(1).max(12),
   videoMaxOpenDigests: z.coerce.number().int().min(1).max(5),
-  videoTargetDurationSeconds: z.coerce.number().int().min(30).max(900),
+  videoTargetDurationSeconds: z.coerce.number().int().min(120).max(180),
   videoWidth: z.coerce.number().int().min(640).max(3840),
   videoHeight: z.coerce.number().int().min(360).max(2160),
   videoFps: z.coerce.number().int().min(15).max(60),

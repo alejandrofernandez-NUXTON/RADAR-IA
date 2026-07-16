@@ -13,11 +13,13 @@ Reglas estrictas para videos de YouTube:
 - Si no puedes verificar el contenido sustantivo del video o transcript, no inventes resumen: baja scores, marca sourceReliability "low" y recommendedAction "review" o "discard".
 
 Calidad editorial esperada:
-- shortSummary: 2-3 frases ejecutivas, con hechos concretos y sin enlaces.
-- longSummary: sintesis clara de lo importante, separando noticias si hay varias.
-- keyPoints: puntos concretos, no frases genericas.
-- whyItMatters: impacto empresarial real, no "puede ser interesante".
-- businessApplications: acciones aplicables por un equipo de empresa.
+- title: expresa el cambio concreto; no copies titulares clickbait del creador.
+- shortSummary: maximo 55 palabras. Responde que ha cambiado y cual es la consecuencia verificable.
+- longSummary: sintesis basada en evidencia, no relato cronologico. Separa hechos, limites y afirmaciones no demostradas.
+- keyPoints: entre 3 y 5 hechos concretos. Conserva nombres, cifras y condiciones relevantes.
+- whyItMatters: explica la decision empresarial que puede cambiar. Prohibido usar "puede ser interesante".
+- businessApplications: entre 1 y 3 acciones ordenadas por valor. Empieza cada una con un verbo y concreta un responsable o una prueba cuando sea posible.
+- Si no hay una accion, riesgo o decision relevante, recommendedAction debe ser "discard" aunque el tema sea popular.
 - tags: etiquetas limpias, sin hashtags ni texto promocional.
 
 Devuelve exclusivamente JSON valido, sin markdown, sin comentarios y sin texto adicional. El JSON debe seguir exactamente esta forma:
