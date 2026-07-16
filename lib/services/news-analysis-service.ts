@@ -2,7 +2,7 @@ import { createHash } from "crypto";
 import { CollectedItemStatus, NewsStatus, RecommendedAction, TelegramStatus } from "@prisma/client";
 import type { CollectedSourceItem, Prisma, Source } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { GeminiService } from "@/lib/services/gemini-service";
+import { OpenAIService } from "@/lib/services/openai-service";
 import { LogService } from "@/lib/services/log-service";
 import { SettingsService } from "@/lib/services/settings-service";
 import { SourceService } from "@/lib/services/source-service";
@@ -56,7 +56,7 @@ function isAnalysisUnavailable(raw: unknown) {
 
 export class NewsAnalysisService {
   private sourceService = new SourceService();
-  private geminiService = new GeminiService();
+  private openaiService = new OpenAIService();
   private telegramService = new TelegramService();
 
   async collectLatestFromActiveSources(progress?: JobProgressReporter): Promise<JobResult> {
@@ -192,7 +192,7 @@ export class NewsAnalysisService {
 
         await progress?.({
           percent,
-          message: `Esperando respuesta de Gemini para: ${item.title}`,
+          message: `OpenAI esta leyendo y analizando: ${item.title}`,
           processedCount,
           successCount,
           failedCount,
@@ -207,7 +207,9 @@ export class NewsAnalysisService {
             data: {
               status: CollectedItemStatus.ERROR,
               processedAt: new Date(),
-              errorMessage: "Gemini no pudo generar un analisis valido."
+              transcript: content.transcript,
+              rawMetadata: jsonSafe(content.rawMetadata || {}),
+              errorMessage: "OpenAI no pudo generar un analisis valido."
             }
           });
         } else {
@@ -217,6 +219,8 @@ export class NewsAnalysisService {
             data: {
               status: CollectedItemStatus.PROCESSED,
               processedAt: new Date(),
+              transcript: content.transcript,
+              rawMetadata: jsonSafe(content.rawMetadata || {}),
               errorMessage: null
             }
           });
@@ -387,7 +391,7 @@ export class NewsAnalysisService {
 
     try {
       const settings = await SettingsService.getAll();
-      const { parsed, raw } = await this.geminiService.analyzeNews(content, options.signal);
+      const { parsed, raw } = await this.openaiService.analyzeNews(content, options.signal);
       const status = isAnalysisUnavailable(raw) ? NewsStatus.ERROR : newsStatusFor(parsed.recommendedAction, parsed.overallScore, settings.publishThreshold);
       const shouldSendTelegram = shouldAutoSendIndividual({
         telegramEnabled: settings.telegramEnabled,
@@ -423,7 +427,7 @@ export class NewsAnalysisService {
           telegramWorthy: parsed.telegramWorthy,
           status,
           publishedAt: status === NewsStatus.PUBLISHED ? new Date() : null,
-          rawGeminiResponse: raw as Prisma.InputJsonValue,
+          rawAiResponse: raw as Prisma.InputJsonValue,
           rawSourceMetadata: jsonSafe({
             title: content.title,
             author: content.author,

@@ -41,7 +41,7 @@ export class JobService {
           report?.({
             ...step,
             percent: Math.min(48, Math.max(2, Math.round(2 + step.percent * 0.46))),
-            message: `Gemini: ${step.message}`
+            message: `OpenAI: ${step.message}`
           });
         analysisProgress.signal = report?.signal;
         analysisProgress.throwIfCancelled = report?.throwIfCancelled;

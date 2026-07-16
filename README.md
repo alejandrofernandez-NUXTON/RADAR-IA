@@ -2,7 +2,7 @@
 
 Aplicacion interna para recopilar, analizar y priorizar novedades de inteligencia artificial, enviar noticias relevantes a Telegram y curar formaciones gratuitas para equipos de empresa.
 
-Incluye un modo opcional para agrupar noticias pendientes en videos explicativos narrados. La generacion puede encadenarse automaticamente despues de Gemini y los videos `READY` pueden enviarse manualmente o mediante la programacion de Telegram. La documentacion completa esta en [docs/video-digests.md](docs/video-digests.md).
+Incluye un modo opcional para agrupar noticias pendientes en videos explicativos narrados. La generacion puede encadenarse automaticamente despues del analisis con OpenAI y los videos `READY` pueden enviarse manualmente o mediante la programacion de Telegram. La documentacion completa esta en [docs/video-digests.md](docs/video-digests.md).
 
 ## Stack
 
@@ -13,7 +13,8 @@ Incluye un modo opcional para agrupar noticias pendientes en videos explicativos
 - PostgreSQL
 - Prisma ORM
 - Autenticacion admin propia con cookie firmada
-- Gemini API como proveedor principal
+- OpenAI Responses, Transcription, Vision y Text-to-Speech como motor de IA
+- YouTube.js con fallback `yt-dlp` para obtener subtitulos, fotogramas y audio real
 - Telegram Bot API
 - Jobs internos protegidos por sesion admin o `CRON_SECRET`
 
@@ -46,14 +47,13 @@ ADMIN_PASSWORD="78202412"
 APP_ENCRYPTION_SECRET="replace-with-32-plus-random-characters"
 CRON_SECRET="replace-with-a-long-random-cron-secret"
 
-GEMINI_API_KEY=""
-GEMINI_MODEL="gemini-3.5-flash"
-
 TELEGRAM_BOT_TOKEN=""
 TELEGRAM_CHAT_ID=""
 
 OPENAI_API_KEY=""
-OPENAI_MODEL=""
+OPENAI_MODEL="gpt-5.6-terra"
+OPENAI_TRANSCRIPTION_MODEL="gpt-4o-transcribe"
+OPENAI_REASONING_EFFORT="low"
 ```
 
 Los valores de base de datos tienen prioridad sobre `.env` cuando existen. Las claves guardadas desde `/admin/settings` se cifran con `APP_ENCRYPTION_SECRET`.
@@ -68,7 +68,7 @@ npm run dev
 npm run typecheck
 npm run build
 npm run ops:diagnose
-npm run ops:gemini:diagnose
+npm run ops:openai:diagnose
 npm run ops:telegram:discover
 npm run ops:telegram:save-first
 npm run ops:telegram:test
@@ -77,25 +77,25 @@ npm run video:demo
 npm run video:preview
 ```
 
-## Gemini
+## OpenAI
 
-1. Crea una API key de Gemini.
+1. Crea una API key en la plataforma de OpenAI y activa facturacion o saldo de API.
 2. Entra en `/admin/settings`.
-3. Pega la key en `Gemini API Key`.
-4. Elige modelo, por defecto `gemini-3.5-flash`.
-5. Ajusta prompt y umbrales.
-6. Guarda.
-7. Ejecuta `/admin/jobs` -> `Buscar noticias ahora`.
+3. Pega la key en `OpenAI API Key`.
+4. Revisa los modelos de analisis, transcripcion y voz.
+5. Activa vision para utilizar storyboards y miniatura como evidencia complementaria.
+6. Ajusta prompt y umbrales, guarda y abre `/admin/diagnostics`.
+7. En `/admin/jobs`, recoge publicaciones y despues pulsa `Procesar pendientes con OpenAI`.
 
 Diagnostico especifico:
 
 ```bash
-npm run ops:gemini:diagnose
+npm run ops:openai:diagnose
 ```
 
-Si Gemini devuelve `403 Your project has been denied access`, la clave existe pero el proyecto de Google no tiene permiso de inferencia para ese modelo. Si devuelve `429 quota exceeded`, la clave/proyecto no tiene cuota disponible para ese modelo. En ambos casos hay que renovar la key, activar facturacion/cuota o usar otro proyecto/modelo con acceso.
+Un `401` indica una clave invalida. Un `429 quota exceeded` indica que la organizacion o proyecto de API no tiene cuota/saldo disponible, aunque ChatGPT Plus o Pro este activo: la facturacion de ChatGPT y la API son independientes.
 
-Mientras Gemini no este operativo, los jobs crean evaluaciones fallback en estado de revision para poder probar el flujo de YouTube, base de datos, admin y Telegram. El analisis real de IA requiere una API key/proyecto Gemini valido.
+Para YouTube, la aplicacion usa subtitulos si son suficientes. Si no existen, descarga el audio con un extractor secundario mantenido y lo envia a `gpt-4o-transcribe`. El resumen usa esa transcripcion y hasta tres storyboards mas la miniatura; la descripcion nunca sustituye al contenido real. Si OpenAI no esta operativo, el elemento queda en error o revision y no se envia a Telegram.
 
 ## Telegram
 
@@ -130,7 +130,7 @@ Desde PowerShell:
 
 ```bash
 npm run ops:diagnose
-npm run ops:gemini:diagnose
+npm run ops:openai:diagnose
 ```
 
 ## Exponer localmente con seguridad
@@ -143,6 +143,8 @@ Opcion permanente: Vercel + Neon/Supabase PostgreSQL + variables de entorno + do
 
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
+- `POST /api/jobs/sources/collect`
+- `POST /api/jobs/news/process`
 - `POST /api/jobs/news/run`
 - `POST /api/jobs/training/run`
 - `POST /api/jobs/telegram/send-pending`
@@ -178,10 +180,10 @@ Los endpoints de jobs aceptan sesion admin o `Authorization: Bearer $CRON_SECRET
 
 ## Limitaciones del MVP
 
-- YouTube funciona mejor con videos concretos y playlists. Canales quedan soportados mediante feed cuando se puede resolver el channel ID.
-- Los transcripts de YouTube dependen de que existan subtitulos publicos.
+- YouTube funciona mejor con videos concretos, playlists y la pestana `Videos` de canales. Directos privados, contenido con restriccion regional/edad o retos anti-bot pueden requerir intervencion operativa.
+- Los audios se limitan a 24 MB por transcripcion. Los videos excepcionalmente largos necesitan segmentacion, que aun no forma parte del MVP.
 - La busqueda de formaciones usa proveedores publicos y catalogos reputados; se puede ampliar con APIs dedicadas.
-- El proveedor OpenAI queda configurado como futuro fallback, pero no se invoca todavia.
+- El guion y la voz del resumen son de OpenAI. Remotion realiza la composicion determinista del MP4 para conservar literalmente noticias, cifras, fuentes y subtitulos; no se usa video generativo para representar hechos.
 - El rate limiting es en memoria, suficiente para MVP local o despliegues simples.
 - El render de video requiere un proceso Node.js persistente, Chromium/FFmpeg compatibles y almacenamiento persistente; no se ha validado dentro de funciones serverless.
 - La retencion de videos finales es configurable, pero su purga programada queda pendiente de un job de mantenimiento.

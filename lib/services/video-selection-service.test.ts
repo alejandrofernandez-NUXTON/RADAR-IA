@@ -75,7 +75,7 @@ const candidate = {
   status: NewsStatus.PUBLISHED,
   publishedAt: new Date("2026-01-02T00:00:00Z"),
   sentToTelegramAt: null,
-  rawGeminiResponse: null,
+  rawAiResponse: null,
   rawSourceMetadata: {},
   videoDigestReservationId: null,
   createdAt: new Date("2026-01-02T00:00:00Z"),

@@ -39,7 +39,7 @@ import { JobService } from "@/lib/services/job-service";
 const processingResult = { processedCount: 2, successCount: 2, failedCount: 0, metadata: { pendingCount: 2 } };
 const videoResult = { processedCount: 2, successCount: 2, failedCount: 0, metadata: { digestId: "digest-1" } };
 
-describe("Gemini to video job chain", () => {
+describe("OpenAI to video job chain", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.jobCreate.mockResolvedValue({ id: "job-1" });
@@ -52,7 +52,7 @@ describe("Gemini to video job chain", () => {
     });
   });
 
-  it("generates a video automatically after Gemini processing", async () => {
+  it("generates a video automatically after OpenAI processing", async () => {
     await new JobService().runNewsProcessingJob();
     expect(mocks.process).toHaveBeenCalledTimes(1);
     expect(mocks.generate).toHaveBeenCalledTimes(1);

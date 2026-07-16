@@ -1,7 +1,7 @@
 import { TrainingStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { GeminiService } from "@/lib/services/gemini-service";
+import { OpenAIService } from "@/lib/services/openai-service";
 import { LogService } from "@/lib/services/log-service";
 import type { JobProgressReporter, JobResult, TrainingCandidate } from "@/lib/types";
 
@@ -180,7 +180,7 @@ class FeedTrainingProvider implements TrainingSearchProvider {
 }
 
 export class TrainingSearchService {
-  private geminiService = new GeminiService();
+  private openaiService = new OpenAIService();
   private providers: TrainingSearchProvider[] = [new ReputableCatalogProvider(), new FeedTrainingProvider()];
 
   async runSearch(limit = 24, progress?: JobProgressReporter): Promise<JobResult> {
@@ -257,7 +257,7 @@ export class TrainingSearchService {
           successCount,
           failedCount
         });
-        const { parsed, raw } = await this.geminiService.evaluateTraining(candidate, progress?.signal);
+        const { parsed, raw } = await this.openaiService.evaluateTraining(candidate, progress?.signal);
         await prisma.trainingItem.create({
           data: {
             title: parsed.title,

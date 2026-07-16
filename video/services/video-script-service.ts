@@ -1,4 +1,4 @@
-import { GeminiService } from "@/lib/services/gemini-service";
+import { OpenAIService } from "@/lib/services/openai-service";
 import { VideoDigestError } from "@/video/errors";
 import type { NewsSnapshot } from "@/video/schemas/news-snapshot-schema";
 import { videoScriptSchema, type VideoScript } from "@/video/schemas/video-script-schema";
@@ -22,7 +22,7 @@ function assertScriptIntegrity(script: VideoScript, snapshots: NewsSnapshot[]) {
 }
 
 export class VideoScriptService {
-  constructor(private readonly geminiService = new GeminiService()) {}
+  constructor(private readonly openaiService = new OpenAIService()) {}
 
   async generate(snapshots: NewsSnapshot[], targetDurationSeconds: number, language: string, signal?: AbortSignal) {
     const prompt = `Crea un guion audiovisual estructurado para un video explicativo interno de Nuxton Knowledge Platform.
@@ -61,7 +61,7 @@ Snapshots:
 ${JSON.stringify(snapshots, null, 2)}`;
 
     try {
-      const result = await this.geminiService.generateStructuredJson(prompt, videoScriptSchema, signal);
+      const result = await this.openaiService.generateStructuredJson(prompt, videoScriptSchema, signal);
       assertScriptIntegrity(result.parsed, snapshots);
       return result;
     } catch (error) {

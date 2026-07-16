@@ -1,5 +1,6 @@
 import type { Source } from "@prisma/client";
 import type { SourceContent } from "@/lib/types";
+import { YouTubeMediaService } from "@/lib/services/youtube-media-service";
 
 function decodeHtml(value: string) {
   return value
@@ -244,6 +245,8 @@ function collectVideoRenderers(node: unknown, videos: YouTubeTabVideo[], seen: S
 }
 
 export class YouTubeService {
+  private readonly mediaService = new YouTubeMediaService();
+
   parseVideoId(url: string) {
     try {
       const parsed = new URL(url);
@@ -405,26 +408,36 @@ export class YouTubeService {
   }
 
   private async fetchTranscript(videoId: string) {
-    const listResponse = await fetch(`https://video.google.com/timedtext?type=list&v=${encodeURIComponent(videoId)}`, {
-      signal: AbortSignal.timeout(20_000)
-    });
-    if (!listResponse.ok) return "";
-    const listXml = await listResponse.text();
-    const languages = [...listXml.matchAll(/lang_code="([^"]+)"/gi)].map((match) => match[1]);
-    const language = languages.find((item) => item.startsWith("es")) || languages.find((item) => item.startsWith("en")) || languages[0];
-    if (!language) return "";
+    try {
+      const listResponse = await fetch(`https://video.google.com/timedtext?type=list&v=${encodeURIComponent(videoId)}`, {
+        signal: AbortSignal.timeout(20_000)
+      });
+      if (listResponse.ok) {
+        const listXml = await listResponse.text();
+        const languages = [...listXml.matchAll(/lang_code="([^"]+)"/gi)].map((match) => match[1]);
+        const language = languages.find((item) => item.startsWith("es")) || languages.find((item) => item.startsWith("en")) || languages[0];
+        if (language) {
+          const transcriptResponse = await fetch(
+            `https://video.google.com/timedtext?v=${encodeURIComponent(videoId)}&lang=${encodeURIComponent(language)}`,
+            { signal: AbortSignal.timeout(20_000) }
+          );
+          if (transcriptResponse.ok) {
+            const xml = await transcriptResponse.text();
+            const transcript = [...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/gi)]
+              .map((match) => stripTags(match[1]))
+              .join(" ")
+              .replace(/\s+/g, " ")
+              .trim();
+            if (transcript.length >= 500) return transcript;
+          }
+        }
+      }
+    } catch {
+      // YouTube.js provides the current fallback below.
+    }
 
-    const transcriptResponse = await fetch(
-      `https://video.google.com/timedtext?v=${encodeURIComponent(videoId)}&lang=${encodeURIComponent(language)}`,
-      { signal: AbortSignal.timeout(20_000) }
-    );
-    if (!transcriptResponse.ok) return "";
-    const xml = await transcriptResponse.text();
-    return [...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/gi)]
-      .map((match) => stripTags(match[1]))
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
+    const evidence = await this.mediaService.collectEvidence(`https://www.youtube.com/watch?v=${videoId}`);
+    return evidence.transcript;
   }
 
   private async resolveChannelId(url: string) {

@@ -231,7 +231,7 @@ export class VideoDigestService {
       const snapshots = digest.items.map((item) => newsSnapshotSchema.parse(item.contentSnapshot));
 
       progress?.throwIfCancelled?.();
-      await progress?.({ percent: 15, message: "Creando guion audiovisual con Gemini..." });
+      await progress?.({ percent: 15, message: "OpenAI esta creando el guion audiovisual..." });
       await LogService.info("video.script.started", "Generando guion de video.", { videoDigestId, newsCount: snapshots.length });
       const scriptResult = await this.scriptService.generate(
         snapshots,

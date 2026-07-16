@@ -129,7 +129,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
           {videoDeliveryMode ? (
             <div className="grid gap-3 border-b border-border pb-4 text-sm md:grid-cols-3">
               <PipelineStep number="1" title="Recoger" detail="Ultimas publicaciones de las fuentes" active />
-              <PipelineStep number="2" title="Gemini y video" detail={settings.video.autoGenerateAfterProcessing ? "Generacion automatica activa" : "Solo procesamiento automatico"} active={settings.video.autoGenerateAfterProcessing} />
+              <PipelineStep number="2" title="OpenAI y video" detail={settings.video.autoGenerateAfterProcessing ? "Generacion automatica activa" : "Solo procesamiento automatico"} active={settings.video.autoGenerateAfterProcessing} />
               <PipelineStep number="3" title="Telegram" detail={settings.video.autoSendOnSchedule ? "Envio al vencer el contador" : "Envio exclusivamente manual"} active={settings.video.autoSendOnSchedule} />
             </div>
           ) : null}
@@ -146,17 +146,17 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                 automationEnabled={settings.jobSchedulesEnabled}
               />
               <SchedulePanel
-                title="Procesar con Gemini"
+                title="Procesar con OpenAI"
                 description={videoDeliveryMode && settings.video.autoGenerateAfterProcessing ? "Analiza las publicaciones nuevas y, al terminar, genera automaticamente un video con las noticias elegibles." : "Analiza las publicaciones recogidas, calcula relevancia y decide si se publican."}
                 prefix="process"
                 schedule={settings.jobSchedules.process}
                 status={scheduleStatus.process}
                 endpoint={JOB_ENDPOINTS.newsProcessing}
-                jobLabel={videoDeliveryMode && settings.video.autoGenerateAfterProcessing ? "Analizar con Gemini y generar video" : "Procesar pendientes con Gemini"}
+                jobLabel={videoDeliveryMode && settings.video.autoGenerateAfterProcessing ? "Analizar con OpenAI y generar video" : "Procesar pendientes con OpenAI"}
                 automationEnabled={settings.jobSchedulesEnabled}
                 automationControl={videoDeliveryMode ? {
                   name: "videoAutoGenerateAfterProcessing",
-                  label: "Generar video automaticamente al terminar Gemini",
+                  label: "Generar video automaticamente al terminar OpenAI",
                   checked: settings.video.autoGenerateAfterProcessing
                 } : undefined}
               />

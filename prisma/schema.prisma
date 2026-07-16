@@ -166,7 +166,7 @@ model NewsItem {
   status                   NewsStatus        @default(REVIEW)
   publishedAt              DateTime?
   sentToTelegramAt         DateTime?
-  rawGeminiResponse        Json?
+  rawAiResponse            Json?
   rawSourceMetadata        Json?
   createdAt                DateTime          @default(now())
   updatedAt                DateTime          @updatedAt

@@ -3,7 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { decryptSecret, encryptSecret } from "@/lib/secret-crypto";
 
 const defaults = {
-  "gemini.model": process.env.GEMINI_MODEL || "gemini-3.5-flash",
+  "openai.enabled": "true",
+  "openai.model": process.env.OPENAI_MODEL || "gpt-5.6-terra",
+  "openai.transcriptionModel": process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-transcribe",
+  "openai.reasoningEffort": process.env.OPENAI_REASONING_EFFORT || "low",
+  "openai.visionEnabled": "true",
   "analysis.basePrompt": DEFAULT_NEWS_ANALYSIS_PROMPT,
   "news.publishThreshold": "70",
   "news.telegramThreshold": "82",
@@ -34,20 +38,17 @@ const defaults = {
   "video.height": process.env.VIDEO_HEIGHT || "1080",
   "video.fps": process.env.VIDEO_FPS || "30",
   "video.language": process.env.VIDEO_LANGUAGE || "es-ES",
-  "video.ttsProvider": process.env.VIDEO_TTS_PROVIDER || "gemini",
-  "video.ttsModel": process.env.VIDEO_TTS_MODEL || "gemini-3.1-flash-tts-preview",
-  "video.ttsVoice": process.env.VIDEO_TTS_VOICE || "Kore",
+  "video.ttsProvider": process.env.VIDEO_TTS_PROVIDER || "openai",
+  "video.ttsModel": process.env.VIDEO_TTS_MODEL || "gpt-4o-mini-tts",
+  "video.ttsVoice": process.env.VIDEO_TTS_VOICE || "cedar",
   "video.subtitlesEnabled": "true",
   "video.outputDirectory": process.env.VIDEO_OUTPUT_DIRECTORY || "./data/video-digests",
   "video.keepTempFiles": "false",
   "video.retentionDays": "7",
   "video.failedRetentionDays": "2",
-  "openai.enabled": "false",
-  "openai.model": process.env.OPENAI_MODEL || ""
 } as const;
 
 const envFallbacks: Record<string, string | undefined> = {
-  "gemini.apiKey": process.env.GEMINI_API_KEY,
   "telegram.botToken": process.env.TELEGRAM_BOT_TOKEN,
   "telegram.chatId": process.env.TELEGRAM_CHAT_ID,
   "x.bearerToken": process.env.X_BEARER_TOKEN,
@@ -55,8 +56,6 @@ const envFallbacks: Record<string, string | undefined> = {
 };
 
 export type AppSettings = {
-  geminiApiKey: string | null;
-  geminiModel: string;
   basePrompt: string;
   publishThreshold: number;
   telegramThreshold: number;
@@ -75,8 +74,13 @@ export type AppSettings = {
   xBearerToken: string | null;
   openaiApiKey: string | null;
   openaiModel: string;
+  openaiTranscriptionModel: string;
+  openaiReasoningEffort: OpenAIReasoningEffort;
+  openaiVisionEnabled: boolean;
   openaiEnabled: boolean;
 };
+
+export type OpenAIReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export type TelegramDeliveryMode = "legacy_individual" | "video_digest_manual";
 
@@ -91,7 +95,7 @@ export type VideoSettings = {
   height: number;
   fps: number;
   language: string;
-  ttsProvider: "gemini" | "mock";
+  ttsProvider: "openai" | "mock";
   ttsModel: string;
   ttsVoice: string;
   subtitlesEnabled: boolean;
@@ -162,8 +166,6 @@ export class SettingsService {
 
   static async getAll(): Promise<AppSettings> {
     return {
-      geminiApiKey: await this.getRaw("gemini.apiKey"),
-      geminiModel: await this.getString("gemini.model", "gemini-3.5-flash"),
       basePrompt: await this.getString("analysis.basePrompt", DEFAULT_NEWS_ANALYSIS_PROMPT),
       publishThreshold: await this.getNumber("news.publishThreshold", 70),
       telegramThreshold: await this.getNumber("news.telegramThreshold", 82),
@@ -181,8 +183,11 @@ export class SettingsService {
       video: await this.getVideoSettings(),
       xBearerToken: await this.getRaw("x.bearerToken"),
       openaiApiKey: await this.getRaw("openai.apiKey"),
-      openaiModel: await this.getString("openai.model", ""),
-      openaiEnabled: await this.getBoolean("openai.enabled", false)
+      openaiModel: await this.getString("openai.model", "gpt-5.6-terra"),
+      openaiTranscriptionModel: await this.getString("openai.transcriptionModel", "gpt-4o-transcribe"),
+      openaiReasoningEffort: (await this.getString("openai.reasoningEffort", "low")) as OpenAIReasoningEffort,
+      openaiVisionEnabled: await this.getBoolean("openai.visionEnabled", true),
+      openaiEnabled: await this.getBoolean("openai.enabled", true)
     };
   }
 
@@ -198,9 +203,9 @@ export class SettingsService {
       height: await this.getNumber("video.height", 1080),
       fps: await this.getNumber("video.fps", 30),
       language: await this.getString("video.language", "es-ES"),
-      ttsProvider: (await this.getString("video.ttsProvider", "gemini")) as VideoSettings["ttsProvider"],
-      ttsModel: await this.getString("video.ttsModel", "gemini-3.1-flash-tts-preview"),
-      ttsVoice: await this.getString("video.ttsVoice", "Kore"),
+      ttsProvider: (await this.getString("video.ttsProvider", "openai")) as VideoSettings["ttsProvider"],
+      ttsModel: await this.getString("video.ttsModel", "gpt-4o-mini-tts"),
+      ttsVoice: await this.getString("video.ttsVoice", "cedar"),
       subtitlesEnabled: await this.getBoolean("video.subtitlesEnabled", true),
       outputDirectory: await this.getString("video.outputDirectory", "./data/video-digests"),
       keepTempFiles: await this.getBoolean("video.keepTempFiles", false),

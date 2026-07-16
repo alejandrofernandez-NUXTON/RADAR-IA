@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
+import OpenAI from "openai";
 import { SettingsService } from "@/lib/services/settings-service";
 import { VideoDigestError } from "@/video/errors";
 import type { TtsResult } from "@/video/types/video-types";
@@ -48,130 +49,71 @@ export async function writePcmWave(outputPath: string, pcm: Buffer, sampleRate =
 
 export async function getWaveDuration(outputPath: string) {
   const data = await readFile(outputPath);
-  if (data.length < 44 || data.toString("ascii", 0, 4) !== "RIFF") {
+  if (data.length < 12 || data.toString("ascii", 0, 4) !== "RIFF" || data.toString("ascii", 8, 12) !== "WAVE") {
     throw new VideoDigestError("TTS_GENERATION_ERROR", "El proveedor TTS no genero un WAV valido.");
   }
-  const channels = data.readUInt16LE(22);
-  const sampleRate = data.readUInt32LE(24);
-  const bitsPerSample = data.readUInt16LE(34);
-  const dataSize = data.readUInt32LE(40);
-  return dataSize / (sampleRate * channels * (bitsPerSample / 8));
-}
 
-type InteractionAudioResponse = {
-  output_audio?: { data?: string; mime_type?: string };
-};
-
-type GenerateContentAudioResponse = {
-  candidates?: Array<{
-    content?: { parts?: Array<{ inlineData?: { data?: string; mimeType?: string } }> };
-  }>;
-};
-
-async function responseError(response: Response) {
-  const text = await response.text();
-  try {
-    const payload = JSON.parse(text) as { error?: { message?: string } };
-    return payload.error?.message || text;
-  } catch {
-    return text;
+  let byteRate = 0;
+  let audioBytes = 0;
+  let offset = 12;
+  while (offset + 8 <= data.length) {
+    const chunkId = data.toString("ascii", offset, offset + 4);
+    const chunkSize = data.readUInt32LE(offset + 4);
+    const chunkStart = offset + 8;
+    if (chunkStart + chunkSize > data.length) break;
+    if (chunkId === "fmt " && chunkSize >= 12) byteRate = data.readUInt32LE(chunkStart + 8);
+    if (chunkId === "data") audioBytes = chunkSize;
+    offset = chunkStart + chunkSize + (chunkSize % 2);
   }
+  if (!byteRate || !audioBytes) {
+    throw new VideoDigestError("TTS_GENERATION_ERROR", "El WAV de OpenAI no contiene chunks de audio validos.");
+  }
+  return audioBytes / byteRate;
 }
 
-export class GeminiTtsProvider implements TextToSpeechProvider {
+export class OpenAITtsProvider implements TextToSpeechProvider {
+  private readonly client: OpenAI;
+
   constructor(
-    private readonly apiKey: string,
+    apiKey: string,
     private readonly model: string,
     private readonly defaultVoice: string
-  ) {}
-
-  private async requestInteraction(input: TtsInput) {
-    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
-      body: JSON.stringify({
-        model: this.model.replace(/^models\//, ""),
-        input: `Sintetiza voz en ${input.language} con tono profesional, claro y natural. Lee exactamente el texto situado despues de TRANSCRIPCION. No leas estas instrucciones.\n\nTRANSCRIPCION:\n${input.text}`,
-        response_format: { type: "audio" },
-        generation_config: { speech_config: [{ voice: input.voice || this.defaultVoice }] }
-      }),
-      signal: combinedSignal(120_000, input.signal)
-    });
-    if (!response.ok) throw new Error(`Gemini TTS ${response.status}: ${await responseError(response)}`);
-    const payload = (await response.json()) as InteractionAudioResponse;
-    if (!payload.output_audio?.data) throw new Error("Gemini TTS no devolvio audio.");
-    return {
-      data: Buffer.from(payload.output_audio.data, "base64"),
-      mimeType: payload.output_audio.mime_type || "audio/L16;rate=24000"
-    };
-  }
-
-  private async requestGenerateContent(input: TtsInput) {
-    const model = this.model.replace(/^models\//, "");
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(this.apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `Lee en ${input.language}, con tono profesional y natural:\n${input.text}` }] }],
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: { prebuiltVoiceConfig: { voiceName: input.voice || this.defaultVoice } }
-            }
-          }
-        }),
-        signal: combinedSignal(120_000, input.signal)
-      }
-    );
-    if (!response.ok) throw new Error(`Gemini TTS ${response.status}: ${await responseError(response)}`);
-    const payload = (await response.json()) as GenerateContentAudioResponse;
-    const audio = payload.candidates?.[0]?.content?.parts?.find((part) => part.inlineData?.data)?.inlineData;
-    if (!audio?.data) throw new Error("Gemini TTS no devolvio audio.");
-    return { data: Buffer.from(audio.data, "base64"), mimeType: audio.mimeType || "audio/L16;rate=24000" };
+  ) {
+    this.client = new OpenAI({ apiKey, maxRetries: 2, timeout: 120_000 });
   }
 
   async synthesize(input: TtsInput): Promise<TtsResult> {
-    let audio: { data: Buffer; mimeType: string } | null = null;
-    let lastError: unknown;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        audio = await this.requestInteraction(input);
-        break;
-      } catch (interactionError) {
-        if (input.signal?.aborted) throw interactionError;
-        try {
-          audio = await this.requestGenerateContent(input);
-          break;
-        } catch (generateError) {
-          lastError = new Error(
-            `${interactionError instanceof Error ? interactionError.message : "Interactions fallo"} | ${generateError instanceof Error ? generateError.message : "generateContent fallo"}`
-          );
-        }
+    try {
+      const response = await this.client.audio.speech.create(
+        {
+          model: this.model,
+          voice: input.voice || this.defaultVoice,
+          input: input.text,
+          instructions: `Habla en ${input.language}, con espanol natural de Espana, tono profesional, claro y ejecutivo. Respeta nombres propios, cifras y pausas. No anadas ni elimines contenido.`,
+          response_format: "wav"
+        },
+        { signal: combinedSignal(120_000, input.signal) }
+      );
+      const audio = Buffer.from(await response.arrayBuffer());
+      if (audio.toString("ascii", 0, 4) !== "RIFF") {
+        throw new Error("OpenAI no devolvio un WAV valido.");
       }
-    }
-    if (!audio) {
+      await mkdir(path.dirname(input.outputPath), { recursive: true });
+      await writeFile(input.outputPath, audio);
+      return {
+        outputPath: input.outputPath,
+        durationSeconds: await getWaveDuration(input.outputPath),
+        mimeType: "audio/wav",
+        provider: "openai",
+        model: this.model
+      };
+    } catch (error) {
       throw new VideoDigestError(
         "TTS_GENERATION_ERROR",
-        `No se pudo generar la narracion: ${lastError instanceof Error ? lastError.message : "error desconocido"}`,
-        { cause: lastError }
+        `No se pudo generar la narracion con OpenAI: ${error instanceof Error ? error.message : "error desconocido"}`,
+        { cause: error }
       );
     }
-
-    await mkdir(path.dirname(input.outputPath), { recursive: true });
-    if (audio.data.toString("ascii", 0, 4) === "RIFF") {
-      await writeFile(input.outputPath, audio.data);
-    } else {
-      await writePcmWave(input.outputPath, audio.data, 24_000);
-    }
-    return {
-      outputPath: input.outputPath,
-      durationSeconds: await getWaveDuration(input.outputPath),
-      mimeType: "audio/wav",
-      provider: "gemini",
-      model: this.model
-    };
   }
 }
 
@@ -191,12 +133,12 @@ export class MockTtsProvider implements TextToSpeechProvider {
   }
 }
 
-export async function createTtsProvider(override?: "gemini" | "mock") {
+export async function createTtsProvider(override?: "openai" | "mock") {
   const settings = await SettingsService.getAll();
   const provider = override || settings.video.ttsProvider;
   if (provider === "mock") return new MockTtsProvider();
-  if (!settings.geminiApiKey) {
-    throw new VideoDigestError("TTS_GENERATION_ERROR", "Configura una API key de Gemini para generar la narracion.");
+  if (!settings.openaiApiKey) {
+    throw new VideoDigestError("TTS_GENERATION_ERROR", "Configura una API key de OpenAI para generar la narracion.");
   }
-  return new GeminiTtsProvider(settings.geminiApiKey, settings.video.ttsModel, settings.video.ttsVoice);
+  return new OpenAITtsProvider(settings.openaiApiKey, settings.video.ttsModel, settings.video.ttsVoice);
 }

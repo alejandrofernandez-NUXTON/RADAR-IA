@@ -1,18 +1,18 @@
 import { z } from "zod";
 
-const score = z.coerce.number().min(0).max(100).transform((value) => Math.round(value));
+const score = z.number().int().min(0).max(100);
 
-export const geminiNewsSchema = z.object({
+export const newsAnalysisSchema = z.object({
   title: z.string().min(1),
   shortSummary: z.string().min(1),
   longSummary: z.string().min(1),
-  keyPoints: z.array(z.string()).default([]),
+  keyPoints: z.array(z.string()),
   whyItMatters: z.string().min(1),
-  businessApplications: z.array(z.string()).default([]),
-  toolsMentioned: z.array(z.string()).default([]),
-  companiesMentioned: z.array(z.string()).default([]),
-  categories: z.array(z.string()).default([]),
-  tags: z.array(z.string()).default([]),
+  businessApplications: z.array(z.string()),
+  toolsMentioned: z.array(z.string()),
+  companiesMentioned: z.array(z.string()),
+  categories: z.array(z.string()),
+  tags: z.array(z.string()),
   noveltyScore: score,
   relevanceScore: score,
   practicalityScore: score,
@@ -20,12 +20,12 @@ export const geminiNewsSchema = z.object({
   overallScore: score,
   recommendedAction: z.enum(["publish", "review", "discard"]),
   telegramWorthy: z.boolean(),
-  telegramMessage: z.string().default(""),
+  telegramMessage: z.string(),
   sourceReliability: z.enum(["low", "medium", "high"]),
-  detectedLanguage: z.string().default("es")
+  detectedLanguage: z.string()
 });
 
-export type GeminiNewsAnalysis = z.infer<typeof geminiNewsSchema>;
+export type NewsAnalysis = z.infer<typeof newsAnalysisSchema>;
 
 export const trainingEvaluationSchema = z.object({
   title: z.string().min(1),
@@ -35,14 +35,14 @@ export const trainingEvaluationSchema = z.object({
   contentType: z.enum(["video", "course", "tutorial", "playlist", "article", "documentation"]),
   estimatedDuration: z.string().min(1),
   level: z.enum(["beginner", "intermediate", "advanced"]),
-  topics: z.array(z.string()).default([]),
+  topics: z.array(z.string()),
   qualityScore: score,
   practicalityScore: score,
   freshnessScore: score,
   overallScore: score,
   whyRecommended: z.string().min(1),
   isFree: z.boolean(),
-  language: z.string().default("es")
+  language: z.string()
 });
 
 export type TrainingEvaluation = z.infer<typeof trainingEvaluationSchema>;
@@ -66,8 +66,6 @@ export const sourceInputSchema = z.object({
 });
 
 export const settingsInputSchema = z.object({
-  geminiApiKey: z.string().optional(),
-  geminiModel: z.string().min(2).default("gemini-3.5-flash"),
   basePrompt: z.string().min(50),
   publishThreshold: z.coerce.number().int().min(0).max(100),
   telegramThreshold: z.coerce.number().int().min(0).max(100),
@@ -89,7 +87,7 @@ export const settingsInputSchema = z.object({
   videoHeight: z.coerce.number().int().min(360).max(2160),
   videoFps: z.coerce.number().int().min(15).max(60),
   videoLanguage: z.string().min(2).max(24),
-  videoTtsProvider: z.enum(["gemini", "mock"]),
+  videoTtsProvider: z.enum(["openai", "mock"]),
   videoTtsModel: z.string().min(2).max(120),
   videoTtsVoice: z.string().min(2).max(80),
   videoSubtitlesEnabled: z.coerce.boolean().default(false),
@@ -103,8 +101,11 @@ export const settingsInputSchema = z.object({
   videoFailedRetentionDays: z.coerce.number().int().min(1).max(90),
   xBearerToken: z.string().optional(),
   openaiApiKey: z.string().optional(),
-  openaiModel: z.string().optional(),
-  openaiEnabled: z.coerce.boolean().default(false)
+  openaiModel: z.string().min(2).max(120).default("gpt-5.6-terra"),
+  openaiTranscriptionModel: z.string().min(2).max(120).default("gpt-4o-transcribe"),
+  openaiReasoningEffort: z.enum(["none", "low", "medium", "high", "xhigh", "max"]).default("low"),
+  openaiVisionEnabled: z.coerce.boolean().default(true),
+  openaiEnabled: z.coerce.boolean().default(true)
 });
 
 const scheduleFrequency = z.enum(["hourly", "daily", "weekly"]);

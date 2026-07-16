@@ -33,8 +33,6 @@ function lines(value: string) {
 export async function saveSettingsAction(formData: FormData) {
   await requireAdmin();
   const input = settingsInputSchema.parse({
-    geminiApiKey: formString(formData, "geminiApiKey"),
-    geminiModel: formString(formData, "geminiModel"),
     basePrompt: formString(formData, "basePrompt"),
     publishThreshold: formData.get("publishThreshold"),
     telegramThreshold: formData.get("telegramThreshold"),
@@ -67,10 +65,12 @@ export async function saveSettingsAction(formData: FormData) {
     xBearerToken: formString(formData, "xBearerToken"),
     openaiApiKey: formString(formData, "openaiApiKey"),
     openaiModel: formString(formData, "openaiModel"),
+    openaiTranscriptionModel: formString(formData, "openaiTranscriptionModel"),
+    openaiReasoningEffort: formString(formData, "openaiReasoningEffort"),
+    openaiVisionEnabled: formData.get("openaiVisionEnabled") === "on",
     openaiEnabled: formData.get("openaiEnabled") === "on"
   });
 
-  await SettingsService.set("gemini.model", input.geminiModel);
   await SettingsService.set("analysis.basePrompt", input.basePrompt);
   await SettingsService.set("news.publishThreshold", String(input.publishThreshold));
   await SettingsService.set("news.telegramThreshold", String(input.telegramThreshold));
@@ -99,9 +99,11 @@ export async function saveSettingsAction(formData: FormData) {
   await SettingsService.set("video.retentionDays", String(input.videoRetentionDays));
   await SettingsService.set("video.failedRetentionDays", String(input.videoFailedRetentionDays));
   await SettingsService.set("openai.enabled", String(input.openaiEnabled));
-  await SettingsService.set("openai.model", input.openaiModel || "");
+  await SettingsService.set("openai.model", input.openaiModel);
+  await SettingsService.set("openai.transcriptionModel", input.openaiTranscriptionModel);
+  await SettingsService.set("openai.reasoningEffort", input.openaiReasoningEffort);
+  await SettingsService.set("openai.visionEnabled", String(input.openaiVisionEnabled));
 
-  if (input.geminiApiKey) await SettingsService.set("gemini.apiKey", input.geminiApiKey, true);
   if (input.telegramBotToken) await SettingsService.set("telegram.botToken", input.telegramBotToken, true);
   if (input.telegramChatId) await SettingsService.set("telegram.chatId", input.telegramChatId, true);
   if (input.xBearerToken) await SettingsService.set("x.bearerToken", input.xBearerToken, true);
@@ -400,11 +402,11 @@ export async function detectTelegramChatAction() {
   redirect(`/admin/diagnostics?telegramChat=${result.chats.length ? "multiple" : "none"}`);
 }
 
-export async function useCurrentGeminiModelAction() {
+export async function useRecommendedOpenAIModelAction() {
   await requireAdmin();
-  await SettingsService.set("gemini.model", "gemini-3.5-flash");
-  await LogService.info("gemini.settings", "Modelo Gemini actualizado a gemini-3.5-flash");
+  await SettingsService.set("openai.model", "gpt-5.6-terra");
+  await LogService.info("openai.settings", "Modelo OpenAI actualizado a gpt-5.6-terra");
   revalidatePath("/admin/settings");
   revalidatePath("/admin/diagnostics");
-  redirect("/admin/diagnostics?geminiModel=updated");
+  redirect("/admin/diagnostics?openaiModel=updated");
 }

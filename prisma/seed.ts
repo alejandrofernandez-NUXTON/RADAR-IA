@@ -31,7 +31,11 @@ async function main() {
     }
   });
 
-  await upsertSetting("gemini.model", process.env.GEMINI_MODEL || "gemini-3.5-flash");
+  await upsertSetting("openai.enabled", "true");
+  await upsertSetting("openai.model", process.env.OPENAI_MODEL || "gpt-5.6-terra");
+  await upsertSetting("openai.transcriptionModel", process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-transcribe");
+  await upsertSetting("openai.reasoningEffort", process.env.OPENAI_REASONING_EFFORT || "low");
+  await upsertSetting("openai.visionEnabled", "true");
   await upsertSetting("analysis.basePrompt", DEFAULT_NEWS_ANALYSIS_PROMPT);
   await upsertSetting("news.publishThreshold", "70");
   await upsertSetting("news.telegramThreshold", "82");
@@ -50,12 +54,10 @@ async function main() {
   await upsertSetting("jobs.telegramWeekday", "monday");
   await upsertSetting("telegram.enabled", "false");
   await upsertSetting("telegram.messageTemplate", DEFAULT_TELEGRAM_TEMPLATE);
-  await upsertSetting("openai.enabled", "false");
-  await upsertSetting("openai.model", process.env.OPENAI_MODEL || "");
+  await upsertSetting("video.ttsProvider", process.env.VIDEO_TTS_PROVIDER || "openai");
+  await upsertSetting("video.ttsModel", process.env.VIDEO_TTS_MODEL || "gpt-4o-mini-tts");
+  await upsertSetting("video.ttsVoice", process.env.VIDEO_TTS_VOICE || "cedar");
 
-  if (process.env.GEMINI_API_KEY) {
-    await upsertSetting("gemini.apiKey", encryptSecret(process.env.GEMINI_API_KEY), true);
-  }
   if (process.env.TELEGRAM_BOT_TOKEN) {
     await upsertSetting("telegram.botToken", encryptSecret(process.env.TELEGRAM_BOT_TOKEN), true);
   }

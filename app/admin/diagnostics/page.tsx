@@ -3,7 +3,7 @@ import {
   detectTelegramChatAction,
   runNewsJobAction,
   sendTelegramTestAction,
-  useCurrentGeminiModelAction
+  useRecommendedOpenAIModelAction
 } from "@/lib/actions/admin-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,18 +19,18 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
   const params = await searchParams;
   const [checks, settings] = await Promise.all([new DiagnosticsService().runAll(), SettingsService.getAll()]);
   const telegramStatus = Array.isArray(params.telegramChat) ? params.telegramChat[0] : params.telegramChat;
-  const geminiModelStatus = Array.isArray(params.geminiModel) ? params.geminiModel[0] : params.geminiModel;
+  const openaiModelStatus = Array.isArray(params.openaiModel) ? params.openaiModel[0] : params.openaiModel;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-normal">Diagnostico operativo</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Comprueba DB, Gemini, Telegram y extraccion de fuentes antes de ejecutar jobs.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Comprueba DB, OpenAI, Telegram y extraccion de fuentes antes de ejecutar jobs.</p>
       </div>
 
       {telegramStatus ? <StatusNotice kind={telegramStatus} /> : null}
-      {geminiModelStatus === "updated" ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">Modelo Gemini actualizado a gemini-3.5-flash.</div>
+      {openaiModelStatus === "updated" ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">Modelo OpenAI actualizado a gpt-5.6-terra.</div>
       ) : null}
 
       <section className="grid gap-4 lg:grid-cols-2">
@@ -56,9 +56,9 @@ export default async function DiagnosticsPage({ searchParams }: { searchParams: 
           <CardTitle>Acciones rapidas</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
-          <form action={useCurrentGeminiModelAction}>
-            <Button type="submit" variant={settings.geminiModel === "gemini-3.5-flash" ? "secondary" : "primary"}>
-              Usar gemini-3.5-flash
+          <form action={useRecommendedOpenAIModelAction}>
+            <Button type="submit" variant={settings.openaiModel === "gpt-5.6-terra" ? "secondary" : "primary"}>
+              Usar gpt-5.6-terra
             </Button>
           </form>
           <form action={detectTelegramChatAction}>

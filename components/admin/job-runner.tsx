@@ -49,7 +49,7 @@ const baseJobs: JobButton[] = [
   },
   {
     id: "news-processing",
-    label: "Procesar pendientes con Gemini",
+    label: "Procesar pendientes con OpenAI",
     endpoint: JOB_ENDPOINTS.newsProcessing,
     variant: "outline",
     icon: <Brain className="h-4 w-4" aria-hidden />
@@ -91,7 +91,7 @@ export function JobRunner({
   const jobs = useMemo<JobButton[]>(() => {
     const result = baseJobs.map((job) =>
       job.id === "news-processing" && deliveryMode === "video_digest_manual" && autoGenerateAfterProcessing
-        ? { ...job, label: "Analizar con Gemini y generar video", variant: "primary" as const }
+        ? { ...job, label: "Analizar con OpenAI y generar video", variant: "primary" as const }
         : job
     );
     if (deliveryMode === "legacy_individual") {

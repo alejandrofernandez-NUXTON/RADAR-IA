@@ -16,6 +16,9 @@ export function VideoCover({ title, subtitle, date }: { title: string; subtitle?
         {subtitle ? <div style={{ marginTop: 30, color: "#536168", fontSize: 38, lineHeight: 1.3, maxWidth: 980 }}>{subtitle}</div> : null}
         <div style={{ marginTop: 58, fontSize: 27, color: "#6b777d" }}>{date}</div>
       </div>
+      <div style={{ position: "absolute", right: 105, bottom: 55, color: "#6b777d", fontSize: 20 }}>
+        Guion y voz generados con IA
+      </div>
     </div>
   );
 }

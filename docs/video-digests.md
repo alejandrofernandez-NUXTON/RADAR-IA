@@ -4,7 +4,7 @@
 
 El modo `video_digest_manual` agrupa noticias ya procesadas y publicadas en un MP4 narrado. La generacion y el envio siguen siendo operaciones independientes: generar nunca llama a Telegram. Un video `READY` puede enviarse mediante confirmacion visible del administrador o cuando venza la programacion de Telegram si se ha activado expresamente esa opcion.
 
-No se usan elementos `CollectedSourceItem.PENDING`. Esos registros aun esperan analisis con Gemini. Tampoco se usa `NewsStatus.REVIEW`, que representa revision editorial. Una noticia pendiente de Telegram es un estado derivado centralizado en `TelegramPendingNewsService`.
+No se usan elementos `CollectedSourceItem.PENDING`. Esos registros aun esperan analisis con OpenAI. Tampoco se usa `NewsStatus.REVIEW`, que representa revision editorial. Una noticia pendiente de Telegram es un estado derivado centralizado en `TelegramPendingNewsService`.
 
 Una noticia es elegible cuando:
 
@@ -39,7 +39,7 @@ Las transiciones se validan en `video/state-machine.ts`. Un digest `SENT` o `CAN
 
 - `TelegramPendingNewsService`: unica definicion de elegibilidad, consulta, reserva, liberacion e integridad previa al envio.
 - `VideoDigestService`: orquestacion de generacion, regeneracion y cancelacion.
-- `VideoScriptService`: guion audiovisual JSON de Gemini, validado con Zod.
+- `VideoScriptService`: guion audiovisual JSON de OpenAI, validado con Zod.
 - `NarrationService`: genera clips TTS y mide sus duraciones reales.
 - `MediaAssetsService`: obtiene imagenes permitidas con proteccion SSRF y crea fondos de reserva.
 - `SubtitleService`: construye subtitulos SRT desde el timeline.
@@ -58,7 +58,7 @@ Las transiciones se validan en `video/state-machine.ts`. Un digest `SENT` o `CAN
 
 La seleccion usa una transaccion serializable y un advisory lock de PostgreSQL. El orden es determinista: primero las noticias mas antiguas, despues mayor `overallScore` y finalmente ID. El lote se limita mediante `video.maxNewsItems` y, por defecto, solo se permite un digest abierto.
 
-La transaccion crea el digest, reclama todas las noticias y almacena sus snapshots. Gemini, TTS y Remotion se ejecutan despues, fuera de la transaccion.
+La transaccion crea el digest, reclama todas las noticias y almacena sus snapshots. OpenAI, TTS y Remotion se ejecutan despues, fuera de la transaccion.
 
 Cada item tiene `sourceRevisionHash` y el digest tiene `inputHash`. Antes del envio se vuelven a consultar las noticias y se comprueban estado, reserva y hashes. Una edicion posterior bloquea el envio y exige regenerar el mismo digest. Las noticias nuevas nunca se incorporan a un video `READY`.
 
@@ -67,8 +67,8 @@ Cada item tiene `sourceRevisionHash` y el digest tiene `inputHash`. Antes del en
 El pipeline realiza estas fases:
 
 1. Reserva noticias elegibles.
-2. Genera un guion JSON con Gemini y verifica que no invente noticias o fuentes.
-3. Genera audio por secciones mediante Gemini TTS.
+2. Genera un guion JSON con OpenAI Responses y verifica que no invente noticias o fuentes.
+3. Genera audio por secciones mediante OpenAI Text-to-Speech.
 4. Mide los WAV y construye el timeline con duraciones reales.
 5. Descarga imagenes seguras o usa fondos locales de reserva.
 6. Produce SRT cuando los subtitulos estan activos.
@@ -82,7 +82,7 @@ La generacion se puede detener desde Jobs. El `AbortSignal` se comprueba entre f
 
 Hay dos interruptores independientes:
 
-- `video.autoGenerateAfterProcessing`: al terminar `news_processing`, el mismo job reclama noticias elegibles y genera el video. El progreso pasa de Gemini a guion, TTS, recursos y render. Si no hay noticias o ya existe un digest abierto, termina como no-op.
+- `video.autoGenerateAfterProcessing`: al terminar `news_processing`, el mismo job reclama noticias elegibles y genera el video. El progreso pasa de OpenAI a guion, TTS, recursos y render. Si no hay noticias o ya existe un digest abierto, termina como no-op.
 - `video.autoSendOnSchedule`: cuando vence el contador de Telegram o se invoca `/api/cron/telegram` en su franja, el job busca videos `READY` y envia el mas antiguo. Nunca envia noticias individuales en modo video.
 
 La programacion automatica solo selecciona `READY`. Un digest `SEND_FAILED` o con `deliveryUncertain` no se reintenta automaticamente y debe revisarse desde el panel. La adquisicion atomica de `SENDING` sigue evitando envios duplicados si coinciden el boton, el contador y el cron.
@@ -123,9 +123,9 @@ VIDEO_WIDTH="1920"
 VIDEO_HEIGHT="1080"
 VIDEO_FPS="30"
 VIDEO_LANGUAGE="es-ES"
-VIDEO_TTS_PROVIDER="gemini"
-VIDEO_TTS_MODEL="gemini-3.1-flash-tts-preview"
-VIDEO_TTS_VOICE="Kore"
+VIDEO_TTS_PROVIDER="openai"
+VIDEO_TTS_MODEL="gpt-4o-mini-tts"
+VIDEO_TTS_VOICE="cedar"
 VIDEO_OUTPUT_DIRECTORY="./data/video-digests"
 ```
 
@@ -133,21 +133,23 @@ El panel `/admin/settings` tambien configura subtitulos, temporales y retencion.
 
 Para activar el flujo automatico:
 
-1. Configura Gemini y Telegram como en el flujo existente.
+1. Configura OpenAI y Telegram como en el flujo existente.
 2. En `/admin/settings`, activa `Videos explicativos`.
 3. Selecciona `Video agrupado: envio manual o programado` como modo de Telegram.
-4. Activa `Generar al terminar Gemini`.
+4. Activa `Generar al terminar OpenAI`.
 5. Activa `Enviar al vencer el contador de Telegram` si deseas entrega programada.
 6. Activa los envios automaticos de Telegram y guarda.
 7. En `/admin/jobs`, guarda las horas de recogida, procesamiento y Telegram.
 
-Los dos interruptores tambien aparecen dentro de las tarjetas de programacion de Jobs. Desactivarlos conserva el procesamiento de Gemini y el envio manual sin eliminar horarios.
+Los dos interruptores tambien aparecen dentro de las tarjetas de programacion de Jobs. Desactivarlos conserva el procesamiento de OpenAI y el envio manual sin eliminar horarios.
 
 Para volver al sistema anterior, selecciona `Noticias individuales (modo anterior)`. Es el valor predeterminado y mantiene la compatibilidad de instalaciones existentes.
 
 ## TTS, Remotion y almacenamiento
 
-El proveedor real es Gemini TTS y utiliza la misma clave cifrada de Gemini. El proveedor `mock` genera WAV validos para desarrollo y nunca debe confundirse con una voz de produccion. `npm run video:preview` abre Remotion Studio y `npm run video:demo` produce un MP4 real con datos y TTS simulados, sin base de datos ni Telegram.
+El proveedor real es OpenAI TTS y utiliza la misma clave cifrada de OpenAI. El proveedor `mock` genera WAV validos para desarrollo y nunca debe confundirse con una voz de produccion. La portada informa que el guion y la voz se han generado con IA. `npm run video:preview` abre Remotion Studio y `npm run video:demo` produce un MP4 real con datos y TTS simulados, sin base de datos ni Telegram.
+
+OpenAI genera el guion y la narracion. Remotion compone el MP4 de forma determinista con los snapshots, imagenes, fuentes y subtitulos validados. Esta separacion evita que un generador visual creativo cambie cifras, marcas o hechos de una noticia empresarial.
 
 Los videos se guardan fuera de `/public`, bajo `VIDEO_OUTPUT_DIRECTORY`. La previsualizacion usa una ruta admin autenticada con soporte Range. Las claves almacenadas son rutas relativas y se validan contra path traversal.
 
@@ -193,7 +195,7 @@ Los temporales se eliminan al terminar salvo que `keepTempFiles` este activo. `r
 - `No hay noticias elegibles`: comprueba que sean `PUBLISHED`, `telegramWorthy`, superen el umbral y no esten enviadas o reservadas.
 - `Ya existe un video abierto`: revisalo, envialo o cancelalo antes de generar otro.
 - `Necesita regeneracion`: una noticia incluida cambio despues del render.
-- Error TTS: comprueba clave, facturacion, modelo y voz de Gemini.
+- Error TTS: comprueba clave, facturacion, modelo y voz de OpenAI.
 - Error de Chromium/FFmpeg en Linux: instala las dependencias de sistema que indique Remotion y verifica permisos de escritura.
 - Error de Telegram por tamano: reduce duracion, resolucion o FPS y vuelve a generar.
 - Entrega incierta: comprueba manualmente el grupo; no reintentes a ciegas.

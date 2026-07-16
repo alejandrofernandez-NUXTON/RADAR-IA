@@ -120,7 +120,7 @@ export default async function AdminNewsDetailPage({ params, searchParams }: { pa
             <input type="hidden" name="id" value={item.id} />
             <Button variant="outline" type="submit" disabled={Boolean(item.videoDigestReservationId)}>
               <RefreshCcw className="h-4 w-4" aria-hidden />
-              Reprocesar con Gemini
+              Reprocesar con OpenAI
             </Button>
           </form>
         </CardContent>

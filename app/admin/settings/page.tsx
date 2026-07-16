@@ -14,9 +14,8 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export default async function SettingsPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const saved = params.saved === "1";
-  const [settings, hasGemini, hasTelegramToken, hasTelegramChat, hasXBearerToken, hasOpenAI] = await Promise.all([
+  const [settings, hasTelegramToken, hasTelegramChat, hasXBearerToken, hasOpenAI] = await Promise.all([
     SettingsService.getAll(),
-    SettingsService.hasSecret("gemini.apiKey"),
     SettingsService.hasSecret("telegram.botToken"),
     SettingsService.hasSecret("telegram.chatId"),
     SettingsService.hasSecret("x.bearerToken"),
@@ -41,18 +40,39 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       <form action={saveSettingsAction} className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Gemini y analisis</CardTitle>
+            <CardTitle>OpenAI y analisis</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 lg:grid-cols-2">
-            <Field label="Gemini API Key" hint={hasGemini ? "Ya hay una clave configurada. Deja el campo vacio para conservarla." : "Se guardara cifrada en base de datos."}>
-              <Input name="geminiApiKey" type="password" placeholder={hasGemini ? "Configurada" : "Pega tu API key"} />
+            <label className="flex items-center gap-2 text-sm font-medium lg:col-span-2">
+              <input name="openaiEnabled" type="checkbox" defaultChecked={settings.openaiEnabled} className="h-4 w-4 rounded border-border" />
+              Activar OpenAI como motor principal
+            </label>
+            <Field label="OpenAI API Key" hint={hasOpenAI ? "Configurada. Deja el campo vacio para conservarla." : "Se guardara cifrada en base de datos."}>
+              <Input name="openaiApiKey" type="password" placeholder={hasOpenAI ? "Configurada" : "Pega tu API key"} />
             </Field>
-            <Field label="Modelo Gemini">
-              <Input name="geminiModel" defaultValue={settings.geminiModel || "gemini-3.5-flash"} />
+            <Field label="Modelo de analisis" hint="GPT-5.6 Terra equilibra calidad, coste y velocidad.">
+              <Input name="openaiModel" defaultValue={settings.openaiModel || "gpt-5.6-terra"} />
+            </Field>
+            <Field label="Modelo de transcripcion">
+              <Input name="openaiTranscriptionModel" defaultValue={settings.openaiTranscriptionModel || "gpt-4o-transcribe"} />
+            </Field>
+            <Field label="Esfuerzo de razonamiento">
+              <Select name="openaiReasoningEffort" defaultValue={settings.openaiReasoningEffort}>
+                <option value="none">Ninguno</option>
+                <option value="low">Bajo</option>
+                <option value="medium">Medio</option>
+                <option value="high">Alto</option>
+                <option value="xhigh">Muy alto</option>
+                <option value="max">Maximo</option>
+              </Select>
             </Field>
             <Field label="Idioma de salida">
               <Input name="outputLanguage" defaultValue={settings.outputLanguage || "es"} />
             </Field>
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input name="openaiVisionEnabled" type="checkbox" defaultChecked={settings.openaiVisionEnabled} className="h-4 w-4 rounded border-border" />
+              Analizar storyboards y miniatura de YouTube
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Umbral publicar">
                 <Input name="publishThreshold" type="number" min="0" max="100" defaultValue={settings.publishThreshold} />
@@ -128,7 +148,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
               </label>
               <label className="flex items-start gap-2 text-sm font-medium">
                 <input name="videoAutoGenerateAfterProcessing" type="checkbox" defaultChecked={settings.video.autoGenerateAfterProcessing} className="mt-0.5 h-4 w-4 rounded border-border" />
-                Generar al terminar Gemini
+                Generar al terminar OpenAI
               </label>
               <label className="flex items-start gap-2 text-sm font-medium">
                 <input name="videoAutoSendOnSchedule" type="checkbox" defaultChecked={settings.video.autoSendOnSchedule} className="mt-0.5 h-4 w-4 rounded border-border" />
@@ -167,7 +187,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
             <div className="grid gap-4 lg:grid-cols-3">
               <Field label="Proveedor TTS">
                 <Select name="videoTtsProvider" defaultValue={settings.video.ttsProvider}>
-                  <option value="gemini">Gemini TTS</option>
+                  <option value="openai">OpenAI TTS</option>
                   <option value="mock">Simulado (pruebas)</option>
                 </Select>
               </Field>
@@ -196,24 +216,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
             <div className="rounded-md border border-border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
               El render se ejecuta en el servidor Node y guarda los MP4 fuera de public. En produccion necesita almacenamiento persistente, Chromium y recursos suficientes de CPU y memoria.
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Proveedor secundario</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 lg:grid-cols-2">
-            <label className="flex items-center gap-2 text-sm font-medium lg:col-span-2">
-              <input name="openaiEnabled" type="checkbox" defaultChecked={settings.openaiEnabled} className="h-4 w-4 rounded border-border" />
-              Activar proveedor secundario cuando se implemente fallback multi-provider
-            </label>
-            <Field label="OpenAI API Key" hint={hasOpenAI ? "Configurada. Deja vacio para conservarla." : "Opcional para el futuro."}>
-              <Input name="openaiApiKey" type="password" placeholder={hasOpenAI ? "Configurada" : "Opcional"} />
-            </Field>
-            <Field label="Modelo OpenAI">
-              <Input name="openaiModel" defaultValue={settings.openaiModel || ""} placeholder="gpt-4.1-mini" />
-            </Field>
           </CardContent>
         </Card>
 

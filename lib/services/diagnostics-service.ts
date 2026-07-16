@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { GeminiService } from "@/lib/services/gemini-service";
+import { OpenAIService } from "@/lib/services/openai-service";
 import { SettingsService } from "@/lib/services/settings-service";
 import { SourceService } from "@/lib/services/source-service";
 import { TelegramService } from "@/lib/services/telegram-service";
@@ -16,14 +16,14 @@ function asMessage(error: unknown) {
 }
 
 export class DiagnosticsService {
-  private gemini = new GeminiService();
+  private openai = new OpenAIService();
   private telegram = new TelegramService();
   private sourceService = new SourceService();
 
   async runAll(): Promise<DiagnosticCheck[]> {
     const checks: DiagnosticCheck[] = [];
     checks.push(await this.checkDatabase());
-    checks.push(await this.checkGemini());
+    checks.push(await this.checkOpenAI());
     checks.push(await this.checkTelegramBot());
     checks.push(await this.checkTelegramChat());
     checks.push(await this.checkYouTubeExtraction());
@@ -39,19 +39,19 @@ export class DiagnosticsService {
     }
   }
 
-  async checkGemini(): Promise<DiagnosticCheck> {
+  async checkOpenAI(): Promise<DiagnosticCheck> {
     try {
       const settings = await SettingsService.getAll();
-      if (!settings.geminiApiKey) {
-        return { name: "Gemini", ok: false, message: "Falta Gemini API Key." };
+      if (!settings.openaiApiKey) {
+        return { name: "OpenAI", ok: false, message: "Falta OpenAI API Key." };
       }
-      const result = await this.gemini.testConnection();
-      return { name: "Gemini", ok: true, message: `Gemini responde con el modelo ${result.model}.` };
+      const result = await this.openai.testConnection();
+      return { name: "OpenAI", ok: true, message: `OpenAI responde con el modelo ${result.model}.` };
     } catch (error) {
       return {
-        name: "Gemini",
+        name: "OpenAI",
         ok: false,
-        message: "Gemini no esta operativo con la clave/modelo actual.",
+        message: "OpenAI no esta operativo con la clave o el modelo actual.",
         detail: asMessage(error)
       };
     }

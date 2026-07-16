@@ -15,7 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "ops:diagnose": "tsx scripts/ops-diagnose.ts",
-    "ops:gemini:diagnose": "tsx scripts/gemini-diagnose.ts",
+    "ops:openai:diagnose": "tsx scripts/openai-diagnose.ts",
     "ops:telegram:discover": "tsx scripts/telegram-discover.ts",
     "ops:telegram:save-first": "tsx scripts/telegram-discover.ts --save-first",
     "ops:telegram:test": "tsx scripts/telegram-test.ts",
@@ -31,10 +31,13 @@
     "dotenv": "^16.4.7",
     "lucide-react": "^0.468.0",
     "next": "^15.0.3",
+    "openai": "^6.47.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "remotion": "4.0.488",
-    "zod": "^3.23.8"
+    "youtube-dl-exec": "^3.1.9",
+    "youtubei.js": "^17.2.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
