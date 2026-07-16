@@ -10,9 +10,14 @@ const defaultProps: VideoRenderProps = {
   script: {
     version: "1.0",
     title: "Radar IA",
+    subtitle: null,
     language: "es-ES",
     estimatedDurationSeconds: 20,
-    introduction: { narration: "Resumen de novedades de inteligencia artificial.", onScreenTitle: "Radar IA" },
+    introduction: {
+      narration: "Resumen de novedades de inteligencia artificial.",
+      onScreenTitle: "Radar IA",
+      onScreenText: null
+    },
     scenes: [
       {
         id: "scene-1",
@@ -22,6 +27,8 @@ const defaultProps: VideoRenderProps = {
         narration: "Contenido de previsualizacion para la composicion de video.",
         onScreenBullets: ["Informacion relevante"],
         sourceLabel: "Fuente",
+        sourceUrl: null,
+        preferredImageUrl: null,
         estimatedDurationSeconds: 5
       }
     ],
@@ -30,7 +37,7 @@ const defaultProps: VideoRenderProps = {
       onScreenTitle: "Siguiente paso",
       onScreenBullets: ["Revisar y priorizar"]
     },
-    sources: [{ newsItemId: "preview", name: "Fuente", title: "Novedad destacada" }]
+    sources: [{ newsItemId: "preview", name: "Fuente", title: "Novedad destacada", url: null }]
   },
   timeline: {
     version: "1.0",

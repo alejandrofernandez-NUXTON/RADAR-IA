@@ -3,13 +3,13 @@ import { z } from "zod";
 const narrationBlock = z.object({
   narration: z.string().min(10).max(1800),
   onScreenTitle: z.string().min(2).max(120),
-  onScreenText: z.string().max(220).optional()
+  onScreenText: z.string().max(220).nullable()
 });
 
 export const videoScriptSchema = z.object({
   version: z.literal("1.0"),
   title: z.string().min(3).max(140),
-  subtitle: z.string().max(180).optional(),
+  subtitle: z.string().max(180).nullable(),
   language: z.string().min(2).max(24),
   estimatedDurationSeconds: z.number().int().min(20).max(1200),
   introduction: narrationBlock,
@@ -23,8 +23,8 @@ export const videoScriptSchema = z.object({
         narration: z.string().min(20).max(2400),
         onScreenBullets: z.array(z.string().min(2).max(180)).min(1).max(3),
         sourceLabel: z.string().min(1).max(100),
-        sourceUrl: z.string().url().optional(),
-        preferredImageUrl: z.string().url().optional(),
+        sourceUrl: z.string().max(2048).nullable(),
+        preferredImageUrl: z.string().max(2048).nullable(),
         estimatedDurationSeconds: z.number().int().min(5).max(300)
       })
     )
@@ -40,7 +40,7 @@ export const videoScriptSchema = z.object({
       newsItemId: z.string().min(1),
       name: z.string().min(1).max(100),
       title: z.string().min(1).max(180),
-      url: z.string().url().optional()
+      url: z.string().max(2048).nullable()
     })
   )
 });

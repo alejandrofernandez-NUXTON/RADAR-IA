@@ -18,6 +18,21 @@ function assertScriptIntegrity(script: VideoScript, snapshots: NewsSnapshot[]) {
       throw new VideoDigestError("VIDEO_SCRIPT_VALIDATION_ERROR", "El guion repite una noticia.");
     }
     duplicated.add(scene.newsItemId);
+    assertHttpUrl(scene.sourceUrl, `sourceUrl de ${scene.id}`);
+    assertHttpUrl(scene.preferredImageUrl, `preferredImageUrl de ${scene.id}`);
+  }
+  for (const source of script.sources) {
+    assertHttpUrl(source.url, `url de la fuente ${source.newsItemId}`);
+  }
+}
+
+function assertHttpUrl(value: string | null, label: string) {
+  if (value === null) return;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("unsupported protocol");
+  } catch {
+    throw new VideoDigestError("VIDEO_SCRIPT_VALIDATION_ERROR", `${label} no contiene una URL HTTP valida.`);
   }
 }
 
@@ -48,13 +63,13 @@ Forma JSON exacta:
 {
   "version": "1.0",
   "title": "string",
-  "subtitle": "string opcional",
+  "subtitle": "string o null",
   "language": "${language}",
   "estimatedDurationSeconds": 150,
-  "introduction": {"narration":"string","onScreenTitle":"string","onScreenText":"string opcional"},
-  "scenes": [{"id":"scene-1","newsItemId":"id exacto","order":1,"title":"string","narration":"string","onScreenBullets":["string"],"sourceLabel":"string","sourceUrl":"https://...","preferredImageUrl":"https://... opcional","estimatedDurationSeconds":25}],
+  "introduction": {"narration":"string","onScreenTitle":"string","onScreenText":"string o null"},
+  "scenes": [{"id":"scene-1","newsItemId":"id exacto","order":1,"title":"string","narration":"string","onScreenBullets":["string"],"sourceLabel":"string","sourceUrl":"https://... o null","preferredImageUrl":"https://... o null","estimatedDurationSeconds":25}],
   "conclusion": {"narration":"string","onScreenTitle":"string","onScreenBullets":["string"]},
-  "sources": [{"newsItemId":"id exacto","name":"string","title":"string","url":"https://..."}]
+  "sources": [{"newsItemId":"id exacto","name":"string","title":"string","url":"https://... o null"}]
 }
 
 Snapshots:
@@ -97,6 +112,7 @@ export function createDemoScript(): VideoScript {
         onScreenBullets: ["Mas control y trazabilidad", "Piloto en un proceso acotado", "Medir excepciones y calidad"],
         sourceLabel: "Fuente de demostracion",
         sourceUrl: "https://example.com/demo-agents",
+        preferredImageUrl: null,
         estimatedDurationSeconds: 10
       },
       {
@@ -108,6 +124,7 @@ export function createDemoScript(): VideoScript {
         onScreenBullets: ["Menor coste por tarea", "Menos latencia", "Evaluacion por caso de uso"],
         sourceLabel: "Fuente de demostracion",
         sourceUrl: "https://example.com/demo-models",
+        preferredImageUrl: null,
         estimatedDurationSeconds: 9
       }
     ],

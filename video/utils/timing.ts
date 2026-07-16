@@ -38,7 +38,7 @@ export function buildTimeline(script: VideoScript, tracks: NarrationTrack[], fps
       narration: track.text,
       bullets: scene.onScreenBullets,
       sourceLabel: scene.sourceLabel,
-      sourceUrl: scene.sourceUrl
+      sourceUrl: scene.sourceUrl ?? undefined
     });
     cursor += track.durationSeconds + GAP_SECONDS;
   }

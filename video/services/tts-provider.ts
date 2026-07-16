@@ -47,8 +47,7 @@ export async function writePcmWave(outputPath: string, pcm: Buffer, sampleRate =
   await writeFile(outputPath, Buffer.concat([wavHeader(pcm.length, sampleRate), pcm]));
 }
 
-export async function getWaveDuration(outputPath: string) {
-  const data = await readFile(outputPath);
+export function getWaveDurationFromBuffer(data: Buffer) {
   if (data.length < 12 || data.toString("ascii", 0, 4) !== "RIFF" || data.toString("ascii", 8, 12) !== "WAVE") {
     throw new VideoDigestError("TTS_GENERATION_ERROR", "El proveedor TTS no genero un WAV valido.");
   }
@@ -60,8 +59,12 @@ export async function getWaveDuration(outputPath: string) {
     const chunkId = data.toString("ascii", offset, offset + 4);
     const chunkSize = data.readUInt32LE(offset + 4);
     const chunkStart = offset + 8;
-    if (chunkStart + chunkSize > data.length) break;
     if (chunkId === "fmt " && chunkSize >= 12) byteRate = data.readUInt32LE(chunkStart + 8);
+    if (chunkId === "data" && chunkSize === 0xffffffff) {
+      audioBytes = data.length - chunkStart;
+      break;
+    }
+    if (chunkStart + chunkSize > data.length) break;
     if (chunkId === "data") audioBytes = chunkSize;
     offset = chunkStart + chunkSize + (chunkSize % 2);
   }
@@ -69,6 +72,10 @@ export async function getWaveDuration(outputPath: string) {
     throw new VideoDigestError("TTS_GENERATION_ERROR", "El WAV de OpenAI no contiene chunks de audio validos.");
   }
   return audioBytes / byteRate;
+}
+
+export async function getWaveDuration(outputPath: string) {
+  return getWaveDurationFromBuffer(await readFile(outputPath));
 }
 
 export class OpenAITtsProvider implements TextToSpeechProvider {

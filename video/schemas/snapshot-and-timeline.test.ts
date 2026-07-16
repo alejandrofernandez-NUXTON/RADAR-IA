@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { zodTextFormat } from "openai/helpers/zod";
 import { NewsStatus, RecommendedAction, type NewsItem, type Source, SourceType } from "@prisma/client";
 import { createNewsSnapshot, digestInputHash, newsSnapshotSchema, sourceRevisionHash } from "@/video/schemas/news-snapshot-schema";
 import { videoScriptSchema } from "@/video/schemas/video-script-schema";
@@ -104,6 +105,24 @@ describe("video snapshots", () => {
 describe("script, timeline and subtitles", () => {
   it("accepts the deterministic demo script", () => {
     expect(videoScriptSchema.parse(createDemoScript()).scenes).toHaveLength(2);
+  });
+
+  it("is compatible with OpenAI structured outputs", () => {
+    const format = zodTextFormat(videoScriptSchema, "video_script");
+    expect(JSON.stringify(format)).not.toContain('"format":"uri"');
+  });
+
+  it("represents absent structured fields with null", () => {
+    const script = createDemoScript();
+    expect(
+      videoScriptSchema.safeParse({
+        ...script,
+        subtitle: null,
+        introduction: { ...script.introduction, onScreenText: null },
+        scenes: script.scenes.map((scene) => ({ ...scene, sourceUrl: null, preferredImageUrl: null })),
+        sources: script.sources.map((source) => ({ ...source, url: null }))
+      }).success
+    ).toBe(true);
   });
 
   it("rejects titles that cannot fit the design", () => {

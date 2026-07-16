@@ -26,7 +26,7 @@ export function ExplainerVideo({ script, timeline, generatedDate }: VideoRenderP
         return (
           <Sequence key={segment.id} from={from} durationInFrames={durationInFrames} premountFor={fps}>
             {segment.kind === "intro" ? (
-              <VideoCover title={script.title} subtitle={script.subtitle} date={generatedDate} />
+              <VideoCover title={script.title} subtitle={script.subtitle ?? undefined} date={generatedDate} />
             ) : null}
             {segment.kind === "news" ? (
               <InformationScene
